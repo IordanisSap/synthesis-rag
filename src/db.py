@@ -26,7 +26,7 @@ class ExistDB:
         """
         Reads a document
         """
-        url = f"{self.url}/{filename}"
+        url = f"{self.url}/{filename.removeprefix('/db')}"
         response = requests.get(url, auth=self.auth)
         
         if response.status_code == 200:
@@ -40,7 +40,8 @@ class ExistDB:
         """
         Lists available folders (collections) and files (resources) in a given path.
         """
-        target_url = f"{self.url}/{path.strip('/')}" if path else str(self.url)
+        clean_path = path.removeprefix('/db').strip('/') if path else ""
+        target_url = f"{self.url}/{clean_path}" if clean_path else str(self.url)
         
         response = requests.get(target_url, auth=self.auth)
         

@@ -4,20 +4,24 @@ from src.db import ExistDB, ExistDBError
 from config.loader import parse
 from pathlib import Path
 import logging
-
+from src.schema.validation import get_template
+from src.schema.description import produce_class_description
+from src.services.ai.llm_client import call_LLM
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import HttpUrl
-load_dotenv()
+
 class ExistDBSettings(BaseSettings):
-    url: HttpUrl  # Validates that it's a real URL
+    url: HttpUrl
     user: str
     password: str
     
-    # Automatically loads from your .env file
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(
+        env_file=".env", 
+        env_file_encoding="utf-8",
+        env_prefix="exist_db_"
+    )
 
-# Instantiating the class validates everything immediately
 exist_db_settings = ExistDBSettings() # type: ignore
 
 
@@ -30,7 +34,7 @@ def setup_logging():
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.FileHandler("myapp.log"),
+            logging.FileHandler("logs.log"),
             logging.StreamHandler() # Also print to console
         ]
     )
@@ -49,11 +53,12 @@ try:
 
     for class_folder in contents.folders:
         folder_path = f"{workdir}/{class_folder}"
-        print(folder_path)
-        
-        sub_contents = db.list_contents(folder_path)
-        
-        print(sub_contents)
+        system, user = produce_class_description(db, folder_path)
+
+        if system is not None and user is not None:
+            response = call_LLM(system, user, config["generation"])
+            print(response)
+
 
 except ExistDBError as e:
     logger.critical(f"Aborting execution due to database error: {e}")

@@ -1,2 +1,12 @@
 [database]
 workdir = "DMSCOLLECTION/MESSARA"
+
+[schema]
+llm_samples = 2
+
+[generation]
+model="qwen3:14b"
+provider="ollama"
+temperature=0.1
+num_ctx=8196
+num_predict=100
