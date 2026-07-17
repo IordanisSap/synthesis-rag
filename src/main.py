@@ -11,6 +11,8 @@ from src.services.ai.llm_client import call_LLM
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import HttpUrl
 
+from src.workflows.generate_descriptions import generate_descriptions
+
 class ExistDBSettings(BaseSettings):
     url: HttpUrl
     user: str
@@ -45,20 +47,5 @@ logger = logging.getLogger(__name__)
 
 db = ExistDB(exist_db_settings.url, exist_db_settings.user, exist_db_settings.password)
 
-try:
-    contents = db.list_contents(workdir)
-    
-    if len(contents.files) > 0:
-        logger.warning('Found file in top level directory')
-
-    for class_folder in contents.folders:
-        folder_path = f"{workdir}/{class_folder}"
-        system, user = produce_class_description(db, folder_path)
-
-        if system is not None and user is not None:
-            response = call_LLM(system, user, config["generation"])
-            print(response)
-
-
-except ExistDBError as e:
-    logger.critical(f"Aborting execution due to database error: {e}")
+descs = generate_descriptions(db, workdir, config)
+print(descs)

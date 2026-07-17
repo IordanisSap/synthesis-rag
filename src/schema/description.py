@@ -50,17 +50,14 @@ def produce_class_description(db: ExistDB, folder_path: str, samples : int = 3):
         ]
 
 
-        print(instanceFileContents[0])
-        print(trim_for_prompt(templateFileContent))
         prompt_params = {
             "name": folder_content.path.split("/")[-1],
             "template": trim_for_prompt(templateFileContent),
             "instances": f"Example: {'\n\n Another Example: \n'.join(instanceFileContents)}"
         }
 
-        # system, user = PromptBuilder.build_messages(PromptTemplate.SUMMARIZE_CLASS, prompt_params)
-        # return system, user 
-        return None, None
+        system, user = PromptBuilder.build_messages(PromptTemplate.SUMMARIZE_CLASS, prompt_params)
+        return system, user 
     else:
         logger.info(f"{folder_path} does not contain a template and will not be indexed)")
         return None, None
