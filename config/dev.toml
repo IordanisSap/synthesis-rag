@@ -1,4 +1,5 @@
 [database]
+base_path = "/db"
 workdir = "DMSCOLLECTION/MESSARA"
 
 [schema]

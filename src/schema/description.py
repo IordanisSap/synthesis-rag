@@ -1,64 +1,71 @@
-from src.db import CollectionContents, ExistDB
-from src.schema.validation import get_template, NoInstanceError
+from src.db import ExistDB
+from src.schema.schema import get_template_filepath, NoInstanceError, get_instances_filepaths
+from src.schema.utils import trim_xml_fields
 import logging
-from src.services.ai.prompts.registry import PromptBuilder, PromptTemplate
-import xml.etree.ElementTree as ET
+from collections.abc import Sequence
+from dataclasses import dataclass, asdict
+
 
 
 logger = logging.getLogger(__name__)
 
 
-def produce_class_description(db: ExistDB, folder_path: str, samples : int = 3):
+@dataclass
+class ClassContext:
+    name: str
+    template: str
+    example_instances: list[str]
 
-    def trim_for_prompt(xml_str: str) -> str:
-        root = ET.fromstring(xml_str)    
+    def to_dict(self, delimiter: str = "\n\n") -> dict:
+        data = asdict(self)
+        data['instances'] = delimiter.join(self.example_instances)
         
-        admin = root.find("admin")
-        if admin is not None:
-            root.remove(admin)
-                    
-        ET.indent(root, space="  ")
-        
-        return ET.tostring(root, encoding="unicode")
+        return data
 
-
+def get_class_context(db: ExistDB, folder_path: str, samples : int = 2):
     folder_content = db.list_contents(folder_path)
-    templateFile = get_template(folder_content)
+    templateFile = get_template_filepath(folder_content)
 
     if templateFile:
         templateFileContent = db.read_document(templateFile)
-        if templateFileContent is None:
-            logger.error(f"Template file {templateFile} could not be read.")
-            return None, None
         
         # Assuming all folders contain data
-        dataFolder = folder_content.folders[0]
-        instanceFolderContent = db.list_contents(f"{folder_content.path}/{dataFolder}")
-
-        if len(instanceFolderContent.files) == 0:
-            error_msg = f"No data instance exists in: {folder_content.path}/{dataFolder} \n A data instance is required to produce the class description"
+        instanceFolders = get_instances_filepaths(folder_content)
+        if len(instanceFolders) == 0:
+            error_msg = f"No data instance exists in: {folder_content.path} \n A data instance is required to produce the class description"
             logger.error(error_msg)
             raise NoInstanceError(error_msg)
 
-        chosenSamples = instanceFolderContent.files[:samples]
+        instanceFileContents = get_class_samples(db, instanceFolders, samples)
 
-        instanceFileContents = [
-            trim_for_prompt(content) for content in (
-                db.read_document(f"{instanceFolderContent.path}/{sample}")
-                for sample in chosenSamples
-            ) if content is not None
-        ]
+        return ClassContext(
+            name=folder_content.path.split("/")[-1],
+            template=trim_xml_fields(templateFileContent),
+            example_instances=instanceFileContents
+        )
 
 
-        prompt_params = {
-            "name": folder_content.path.split("/")[-1],
-            "template": trim_for_prompt(templateFileContent),
-            "instances": f"Example: {'\n\n Another Example: \n'.join(instanceFileContents)}"
-        }
-
-        system, user = PromptBuilder.build_messages(PromptTemplate.SUMMARIZE_CLASS, prompt_params)
-        return system, user 
     else:
         logger.info(f"{folder_path} does not contain a template and will not be indexed)")
-        return None, None
+        return None
     
+
+def get_class_samples(db: ExistDB, instance_folders: Sequence[str], samples : int = 3):
+    """
+    Returns a list of sample instances from the given folder path.
+    """
+    instanceFolderContent = db.list_contents(f"{instance_folders[0]}")
+
+    if len(instanceFolderContent.files) == 0:
+        error_msg = f"No data instance exists in: {instanceFolderContent.path} \n A data instance is required to produce the class description"
+        logger.error(error_msg)
+        raise NoInstanceError(error_msg)
+    
+    chosenSamples = instanceFolderContent.files[:samples]
+
+    instanceFileContents = [
+        trim_xml_fields(db.read_document(f"{instanceFolderContent.path}/{sample}"))
+        for sample in chosenSamples
+    ]
+
+    return instanceFileContents

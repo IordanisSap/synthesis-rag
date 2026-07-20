@@ -22,7 +22,7 @@ class ExistDB:
         self.url = url
         self.auth = HTTPBasicAuth(username, password)
         
-    def read_document(self, filename: str):
+    def read_document(self, filename: str) -> str:
         """
         Reads a document
         """
@@ -34,7 +34,24 @@ class ExistDB:
             return response.text
         else:
             logger.error(f"Failed to read: {response.status_code} - {response.text}")
+            raise ExistDBError(f"Failed to read document: {response.status_code} - {response.text}")
 
+    def execute_xquery(self, xquery: str) -> str:
+            """
+            Executes an XQuery against the eXist-db instance using form data.
+            """
+            response = requests.post(
+                f"{self.url}/rest", 
+                auth=self.auth, 
+                data={"_query": xquery} 
+            )
+            
+            if response.status_code == 200:
+                logger.info("--- XQuery executed successfully ---")
+                return response.text
+            else:
+                logger.error(f"Failed to execute XQuery: {response.status_code} - {response.text}")
+                raise ExistDBError(f"Failed to execute XQuery: {response.status_code} - {response.text}")
 
     def list_contents(self, path: str = "") -> CollectionContents:
         """

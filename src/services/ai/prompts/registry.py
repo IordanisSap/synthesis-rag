@@ -15,6 +15,11 @@ class PromptTemplate(Enum):
         user_path="schema/class_summarization_user.md"
     )
 
+    GENERATE_XQUERY = PromptBundle(
+        system_path="xquery/generate_xquery_system.md",
+        user_path="xquery/generate_xquery_user.md"
+    )
+
 class PromptBuilder:
     @staticmethod
     def build_messages(procedure: PromptTemplate, variables: dict) -> tuple[str, str]:
@@ -40,8 +45,6 @@ class PromptBuilder:
             sys_content = sys_template.format(**variables)
             user_content = user_template.format(**variables)
         except KeyError as e:
-            # Catches the error if the markdown asks for {foo} but 'foo' isn't in the dict
             raise ValueError(f"Missing required variable for prompt: {e}")
             
-        # 5. Return the exact structure expected by OpenAI / Anthropic APIs
         return sys_content, user_content

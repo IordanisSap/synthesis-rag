@@ -34,4 +34,5 @@ def call_ollama(system_prompt, user_prompt, model_config) -> str | None:
             {"role": "user", "content": user_prompt},
         ]
     )
+
     return response.message.content
