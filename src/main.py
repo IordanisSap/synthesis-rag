@@ -8,13 +8,16 @@ from src.schema.schema import get_template_filepath
 from src.services.ai.llm_client import call_LLM
 from src.schema.description import get_class_context, ClassContext
 from src.xquery.build_context import build_class_xquery_context
-from src.xquery.postprocessing import set_xquery_collection
+from src.xquery.postprocessing import postprocess_xquery
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import HttpUrl
 
 from src.workflows.generate_descriptions import generate_descriptions, get_class_contexts
 from src.workflows.generate_xquery import generate_xquery
+
+from src.services.ai.tools import detect_relevant_classes
+from src.index.index import save_to_index, load_from_index
 
 class ExistDBSettings(BaseSettings):
     url: HttpUrl
@@ -29,6 +32,7 @@ class ExistDBSettings(BaseSettings):
 
 exist_db_settings = ExistDBSettings() # type: ignore
 
+INDEX_FOLDER = "./index"
 
 CONFIG_PATH = Path("config/dev.toml")
 config = parse(CONFIG_PATH)
@@ -50,22 +54,31 @@ logger = logging.getLogger(__name__)
 
 db = ExistDB(exist_db_settings.url, exist_db_settings.user, exist_db_settings.password)
 
-# descs = generate_descriptions(db, workdir, config["generation"])
-# print(descs)
+
+descs = load_from_index("class_descriptions", workdir.split("/")[-1], INDEX_FOLDER)
+if not descs:
+    descs = generate_descriptions(db, workdir, config["generation"])
+    save_to_index("class_descriptions", descs, workdir.split("/")[-1], INDEX_FOLDER)
 
 
-contexts = get_class_contexts(db, workdir)
+# QUESTION = "Can I visit Μονή Παναγίας Καλυβιανής by car?"
+QUESTION = "Find the names of all persons working in ΙΤΕ"
 
-# xquery = generate_xquery(context="", question="Find the names of all persons working in 'ΙΤΕ'", llm_config=config["generation"])
-# print(xquery)
+relevant_classes = detect_relevant_classes(
+    question=QUESTION,
+    class_descriptions=descs,
+    llm_config=config["generation"]
+)
+
+print(relevant_classes)
 
 
+contexts = get_class_contexts(db, workdir, classes=relevant_classes)
 xquery = generate_xquery(context="\n".join([build_class_xquery_context(context) for context in contexts]), 
-                         question="Find the names of all persons working in 'ΙΤΕ'", 
+                         question=QUESTION, 
                          llm_config=config["generation"])
 
-xquery = set_xquery_collection(xquery, config["database"])
-
-print(xquery)
-
+print(f"Raw XQuery:\n{xquery}\n")
+xquery = postprocess_xquery(xquery, config["database"])
+print(f"Postprocessed XQuery:\n{xquery}\n")
 print(db.execute_xquery(xquery))

@@ -34,7 +34,8 @@ def get_class_context(db: ExistDB, folder_path: str, samples : int = 2):
         if len(instanceFolders) == 0:
             error_msg = f"No data instance exists in: {folder_content.path} \n A data instance is required to produce the class description"
             logger.error(error_msg)
-            raise NoInstanceError(error_msg)
+            return None                 # TODO: Skip this for now, see later how templates without instances should be handled
+            # raise NoInstanceError(error_msg)
 
         instanceFileContents = get_class_samples(db, instanceFolders, samples)
 

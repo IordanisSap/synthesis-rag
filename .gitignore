@@ -3,3 +3,7 @@
 
 # Python specific
 __pycache__
+
+exist_db_backup
+
+tmp

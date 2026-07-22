@@ -20,6 +20,11 @@ class PromptTemplate(Enum):
         user_path="xquery/generate_xquery_user.md"
     )
 
+    SELECT_RELEVANT_CLASSES = PromptBundle(
+        system_path="select_classes/select_classes_system.md",
+        user_path="select_classes/select_classes_user.md"
+    )
+
 class PromptBuilder:
     @staticmethod
     def build_messages(procedure: PromptTemplate, variables: dict) -> tuple[str, str]:
