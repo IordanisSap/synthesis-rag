@@ -1,5 +1,5 @@
 from collections.abc import Sequence
-from src.db import CollectionContents
+from src.db import CollectionContents, ExistDB
 
 
 class NoInstanceError(Exception):
@@ -39,3 +39,29 @@ def get_instances_filepaths(collectionContents: CollectionContents) -> Sequence[
         return []
     
     return [collectionContents.path + "/" + folder for folder in collectionContents.folders]
+
+
+def get_class_filepaths(db: ExistDB, collectionContents: CollectionContents) -> tuple[str, list[str]] | None:
+    """
+    Returns the template filepath and all data instance filepaths for a valid class folder.
+    Returns None when the folder does not match the class template + instance-folder rule.
+    """
+
+    templateFile = get_template_filepath(collectionContents)
+    if templateFile is None:
+        return None
+
+    instanceFolders = get_instances_filepaths(collectionContents)
+    if len(instanceFolders) == 0:
+        return None
+
+    instanceFiles: list[str] = []
+    for instanceFolder in instanceFolders:
+        instanceFolderContent = db.list_contents(instanceFolder)
+        xmlFiles = [file for file in instanceFolderContent.files if file.lower().endswith(".xml")]
+        instanceFiles.extend(f"{instanceFolderContent.path}/{file}" for file in xmlFiles)
+
+    if len(instanceFiles) == 0:
+        return None
+
+    return templateFile, instanceFiles

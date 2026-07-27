@@ -13,10 +13,10 @@ from src.xquery.postprocessing import postprocess_xquery
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import HttpUrl
 
-from src.workflows.generate_descriptions import generate_descriptions, get_class_contexts
-from src.workflows.generate_xquery import generate_xquery
+from src.workflows.workflows import workflow1
+from src.workflows.blocks.get_field_descriptions import get_field_descriptions
+from src.workflows.blocks.trim_empty_fields import trim_empty_class_fields
 
-from src.services.ai.tools import detect_relevant_classes
 from src.index.index import save_to_index, load_from_index
 
 class ExistDBSettings(BaseSettings):
@@ -32,7 +32,7 @@ class ExistDBSettings(BaseSettings):
 
 exist_db_settings = ExistDBSettings() # type: ignore
 
-INDEX_FOLDER = "./index"
+INDEX_FOLDER = ".index"
 
 CONFIG_PATH = Path("config/dev.toml")
 config = parse(CONFIG_PATH)
@@ -54,31 +54,14 @@ logger = logging.getLogger(__name__)
 
 db = ExistDB(exist_db_settings.url, exist_db_settings.user, exist_db_settings.password)
 
+field_descriptions = load_from_index("field_descriptions", workdir.split("/")[-1], INDEX_FOLDER)
+if not field_descriptions:
+    field_descriptions = get_field_descriptions(db, workdir)
+    save_to_index("field_descriptions", field_descriptions, workdir.split("/")[-1], INDEX_FOLDER)
 
-descs = load_from_index("class_descriptions", workdir.split("/")[-1], INDEX_FOLDER)
-if not descs:
-    descs = generate_descriptions(db, workdir, config["generation"])
-    save_to_index("class_descriptions", descs, workdir.split("/")[-1], INDEX_FOLDER)
 
-
+res = trim_empty_class_fields(field_descriptions["Person"]["fields"])
+print(f"Trimmed Organization fields: {res}")
 # QUESTION = "Can I visit Μονή Παναγίας Καλυβιανής by car?"
-QUESTION = "Find the names of all persons working in ΙΤΕ"
-
-relevant_classes = detect_relevant_classes(
-    question=QUESTION,
-    class_descriptions=descs,
-    llm_config=config["generation"]
-)
-
-print(relevant_classes)
-
-
-contexts = get_class_contexts(db, workdir, classes=relevant_classes)
-xquery = generate_xquery(context="\n".join([build_class_xquery_context(context) for context in contexts]), 
-                         question=QUESTION, 
-                         llm_config=config["generation"])
-
-print(f"Raw XQuery:\n{xquery}\n")
-xquery = postprocess_xquery(xquery, config["database"])
-print(f"Postprocessed XQuery:\n{xquery}\n")
-print(db.execute_xquery(xquery))
+# QUESTION = "Find the names of all persons working in ΙΤΕ"
+# workflow1(QUESTION, db, workdir, config, INDEX_FOLDER)

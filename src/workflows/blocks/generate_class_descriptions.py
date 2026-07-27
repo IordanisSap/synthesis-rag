@@ -8,7 +8,7 @@ from src.services.ai.prompts.registry import PromptBuilder, PromptTemplate
 
 logger = logging.getLogger(__name__)
 
-def generate_descriptions(db: ExistDB, workdir: str, llm_config: dict):
+def generate_class_descriptions(db: ExistDB, workdir: str, llm_config: dict):
     class_contexts = get_class_contexts(db, workdir)
     descriptions = {}
     for class_context in class_contexts:

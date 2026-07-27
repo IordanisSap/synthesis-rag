@@ -36,6 +36,14 @@ class ExistDB:
             logger.error(f"Failed to read: {response.status_code} - {response.text}")
             raise ExistDBError(f"Failed to read document: {response.status_code} - {response.text}")
 
+    def read_document_raw(self, filename: str) -> bytes:
+        url = f"{self.url}/{filename.removeprefix('/db').lstrip('/')}"
+        response = requests.get(url, auth=self.auth)
+        if response.status_code == 200:
+            return response.content
+        raise RuntimeError(f"Failed to read {filename}: {response.status_code} - {response.text}")
+
+
     def execute_xquery(self, xquery: str) -> str:
             """
             Executes an XQuery against the eXist-db instance using form data.
@@ -96,7 +104,6 @@ class ExistDB:
                 if (name := res.get('name')) is not None
             ]
             
-            # Return the validated Pydantic model
             return CollectionContents(
                 path=collection_name,
                 folders=folders,
