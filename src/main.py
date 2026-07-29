@@ -13,9 +13,7 @@ from src.xquery.postprocessing import postprocess_xquery
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import HttpUrl
 
-from src.workflows.workflows import workflow1
-from src.workflows.blocks.get_field_descriptions import get_field_descriptions
-from src.workflows.blocks.trim_empty_fields import trim_empty_class_fields
+from src.workflows.workflows import workflow1, workflow2
 
 from src.index.index import save_to_index, load_from_index
 
@@ -54,14 +52,9 @@ logger = logging.getLogger(__name__)
 
 db = ExistDB(exist_db_settings.url, exist_db_settings.user, exist_db_settings.password)
 
-field_descriptions = load_from_index("field_descriptions", workdir.split("/")[-1], INDEX_FOLDER)
-if not field_descriptions:
-    field_descriptions = get_field_descriptions(db, workdir)
-    save_to_index("field_descriptions", field_descriptions, workdir.split("/")[-1], INDEX_FOLDER)
+workflow2("Find the names of all persons working in ΙΤΕ", db, workdir, config, INDEX_FOLDER)
 
 
-res = trim_empty_class_fields(field_descriptions["Person"]["fields"])
-print(f"Trimmed Organization fields: {res}")
 # QUESTION = "Can I visit Μονή Παναγίας Καλυβιανής by car?"
 # QUESTION = "Find the names of all persons working in ΙΤΕ"
 # workflow1(QUESTION, db, workdir, config, INDEX_FOLDER)

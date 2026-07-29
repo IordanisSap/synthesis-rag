@@ -42,9 +42,12 @@ from xml.etree import ElementTree as ET
 from src.db import ExistDB
 from src.schema.schema import get_class_filepaths
 
-ENUM_MAX_DISTINCT_DEFAULT = 10   # hard cap on distinct values for "enum"
-ENUM_MAX_RATIO_DEFAULT = 0.3     # distinct/occurrences must also stay under this
-FREE_TEXT_SAMPLES = 3            # how many example values to keep for free-text fields
+DEFAULT_XML_FIELDS_TO_TRIM = set(["admin"])
+
+ENUM_MAX_DISTINCT_DEFAULT = 10  # hard cap on distinct values for "enum"
+CONTROLLED_VOCAB_MAX_DISTINCT_DEFAULT = 10
+ENUM_MAX_RATIO_DEFAULT = 0.3  # distinct/occurrences must also stay under this
+FREE_TEXT_SAMPLES = 3  # how many example values to keep for free-text fields
 
 XSI_NS = "http://www.w3.org/2001/XMLSchema-instance"
 EXIST_NS = "http://exist.sourceforge.net/NS/exist"
@@ -53,8 +56,6 @@ DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2}:\d{2})?$")
 TIME_RE = re.compile(r"^\d{2}:\d{2}:\d{2}$")
 INT_RE = re.compile(r"^-?\d+$")
 URI_RE = re.compile(r"^https?://")
-
-
 
 
 def discover_entities(db: ExistDB, root: str, verbose: bool = True):
@@ -84,7 +85,6 @@ def discover_entities(db: ExistDB, root: str, verbose: bool = True):
     return entities
 
 
-
 def local_name(tag: str) -> str:
     return tag.split("}", 1)[1] if tag.startswith("{") else tag
 
@@ -105,7 +105,9 @@ def walk(elem, prefix: str, doc_id: str, require_nonempty: bool, out: list):
             vocab = value
         if require_nonempty and not value:
             continue
-        out.append({"path": f"{prefix}/@{name}", "value": value, "doc": doc_id, "vocab": ""})
+        out.append(
+            {"path": f"{prefix}/@{name}", "value": value, "doc": doc_id, "vocab": ""}
+        )
 
     children = list(elem)
     if not children:
@@ -114,7 +116,9 @@ def walk(elem, prefix: str, doc_id: str, require_nonempty: bool, out: list):
             out.append({"path": prefix, "value": text, "doc": doc_id, "vocab": vocab})
     else:
         for child in children:
-            child_prefix = f"{prefix}/{local_name(child.tag)}" if prefix else local_name(child.tag)
+            child_prefix = (
+                f"{prefix}/{local_name(child.tag)}" if prefix else local_name(child.tag)
+            )
             walk(child, child_prefix, doc_id, require_nonempty, out)
 
 
@@ -132,7 +136,9 @@ def guess_type(values):
     return "string"
 
 
-def build_field_stats(template_paths, observations, enum_max_distinct, enum_max_ratio):
+def build_field_stats(
+    template_paths, observations, enum_max_distinct, enum_max_ratio, cv_max_distinct
+):
     by_path = defaultdict(list)
     for obs in observations:
         by_path[obs["path"]].append(obs)
@@ -178,21 +184,26 @@ def build_field_stats(template_paths, observations, enum_max_distinct, enum_max_
         if category == "free-text":
             field["dataType"] = guess_type(distinct)
             field["sampleValues"] = distinct[:FREE_TEXT_SAMPLES]
-        if category in ("enum", "controlled-vocabulary"):
+        if category == "enum":
             field["values"] = distinct
+        if category == "controlled-vocabulary":
+            field["values"] = distinct[:cv_max_distinct]
 
         fields.append(field)
 
     return fields
 
 
-def build_catalog_for_entity(db, class_name, template_path, instance_paths,
-                              enum_max_distinct, enum_max_ratio):
+def build_catalog_for_entity(
+    db, class_name, template_path, instance_paths, enum_max_distinct, enum_max_ratio, cv_max_distinct
+):
     try:
         template_root = ET.fromstring(db.read_document_raw(template_path))
     except Exception as e:
-        print(f"  ! skipping {class_name}: failed to read template {template_path}: {e}",
-              file=sys.stderr)
+        print(
+            f"  ! skipping {class_name}: failed to read template {template_path}: {e}",
+            file=sys.stderr,
+        )
         return None
 
     template_obs = []
@@ -208,7 +219,9 @@ def build_catalog_for_entity(db, class_name, template_path, instance_paths,
             continue
         walk(root_elem, "", path, True, observations)
 
-    fields = build_field_stats(template_paths, observations, enum_max_distinct, enum_max_ratio)
+    fields = build_field_stats(
+        template_paths, observations, enum_max_distinct, enum_max_ratio, cv_max_distinct
+    )
 
     return {
         "class": class_name,
@@ -218,19 +231,116 @@ def build_catalog_for_entity(db, class_name, template_path, instance_paths,
     }
 
 
-def build_catalog(db, root, enum_max_distinct=ENUM_MAX_DISTINCT_DEFAULT, enum_max_ratio=ENUM_MAX_RATIO_DEFAULT, verbose=False):
+def build_catalog(
+    db,
+    root,
+    enum_max_distinct=ENUM_MAX_DISTINCT_DEFAULT,
+    enum_max_ratio=ENUM_MAX_RATIO_DEFAULT,
+    cv_max_distinct=CONTROLLED_VOCAB_MAX_DISTINCT_DEFAULT,
+    verbose=False,
+):
     entities = discover_entities(db, root, verbose=verbose)
     if not entities:
-        print("No entity folders found matching the expected structure "
-              "(Folder/Folder.xml + Folder/subfolder/*.xml).")
+        print(
+            "No entity folders found matching the expected structure "
+            "(Folder/Folder.xml + Folder/subfolder/*.xml)."
+        )
         return {}
 
     catalog = {}
     for class_name, info in entities.items():
         print(f"Profiling {class_name} ({len(info['instances'])} instance file(s))...")
         catalog[class_name] = build_catalog_for_entity(
-            db, class_name, info["template"], info["instances"],
-            enum_max_distinct, enum_max_ratio,
+            db,
+            class_name,
+            info["template"],
+            info["instances"],
+            enum_max_distinct,
+            enum_max_ratio,
+            cv_max_distinct,
         )
 
     return catalog
+
+
+def strip_fields(root, paths_to_remove: set) -> None:
+    """
+    Removes elements/attributes whose catalog-style path is in paths_to_remove.
+    Mirrors the local-name, namespace-agnostic traversal used by walk()
+    in build_catalog.py, so removal stays consistent with however
+    'always-empty' was computed -- including repeated elements.
+    """
+    removals = []  # (parent, child) pairs, detached after the walk completes
+
+    def recurse(elem, prefix, parent):
+        for raw_name in list(elem.attrib.keys()):
+            if is_noise_attribute(raw_name):
+                continue
+            attr_path = f"{prefix}/@{local_name(raw_name)}"
+            if attr_path in paths_to_remove:
+                del elem.attrib[raw_name]
+
+        children = list(elem)
+        if not children:
+            if prefix in paths_to_remove and parent is not None:
+                removals.append((parent, elem))
+            return
+
+        for child in children:
+            child_prefix = (
+                f"{prefix}/{local_name(child.tag)}" if prefix else local_name(child.tag)
+            )
+            recurse(child, child_prefix, elem)
+
+    recurse(root, "", None)
+
+    for parent, child in removals:
+        parent.remove(child)
+
+
+def prune_empty_containers(root) -> None:
+    """
+    Removes elements that ended up empty (no text, no children, no
+    meaningful attributes) after strip_fields has run.
+    """
+
+    def is_empty(elem) -> bool:
+        text_empty = not (elem.text or "").strip()
+        no_children = len(elem) == 0
+        no_real_attrs = not any(not is_noise_attribute(name) for name in elem.attrib)
+        return text_empty and no_children and no_real_attrs
+
+    def recurse(elem):
+        to_remove = []
+        for child in list(elem):
+            recurse(child)
+            if is_empty(child):
+                to_remove.append(child)
+        for child in to_remove:
+            elem.remove(child)
+
+    recurse(root)
+
+
+def trim_xml_fields(
+    xml_str: str, paths_to_remove: set = DEFAULT_XML_FIELDS_TO_TRIM
+) -> str:
+    root = ET.fromstring(xml_str)
+    strip_fields(root, paths_to_remove)
+    prune_empty_containers(root)
+    ET.indent(root, space="  ")
+    return ET.tostring(root, encoding="unicode")
+
+
+def trim_empty_fields_catalog(fields: list) -> list:
+    """
+    Returns a list of fields with always-empty fields removed.
+    """
+    if not isinstance(fields, list):
+        return fields
+
+    return [
+        field_info 
+        for field_info in fields 
+        if field_info.get("category") != "always-empty"
+    ]

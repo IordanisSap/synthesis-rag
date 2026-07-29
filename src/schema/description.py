@@ -1,6 +1,6 @@
 from src.db import ExistDB
 from src.schema.schema import get_template_filepath, NoInstanceError, get_instances_filepaths
-from src.schema.utils import trim_xml_fields
+from src.schema.fields import trim_xml_fields
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, asdict
