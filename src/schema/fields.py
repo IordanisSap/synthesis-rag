@@ -38,6 +38,7 @@ import re
 import sys
 from collections import defaultdict
 from xml.etree import ElementTree as ET
+import logging
 
 from src.db import ExistDB
 from src.schema.schema import get_class_filepaths
@@ -57,6 +58,7 @@ TIME_RE = re.compile(r"^\d{2}:\d{2}:\d{2}$")
 INT_RE = re.compile(r"^-?\d+$")
 URI_RE = re.compile(r"^https?://")
 
+logger = logging.getLogger(__name__)
 
 def discover_entities(db: ExistDB, root: str, verbose: bool = True):
     """Find folders under root matching the template+data-subfolder rule."""
@@ -185,9 +187,9 @@ def build_field_stats(
             field["dataType"] = guess_type(distinct)
             field["sampleValues"] = distinct[:FREE_TEXT_SAMPLES]
         if category == "enum":
-            field["values"] = distinct
+            field["sampleValues"] = distinct
         if category == "controlled-vocabulary":
-            field["values"] = distinct[:cv_max_distinct]
+            field["sampleValues"] = distinct[:cv_max_distinct]
 
         fields.append(field)
 
@@ -344,3 +346,33 @@ def trim_empty_fields_catalog(fields: list) -> list:
         for field_info in fields 
         if field_info.get("category") != "always-empty"
     ]
+
+
+
+def get_class_field_descriptions(catalog: dict, className: str) -> list:
+    """
+    Returns a list of field descriptions for the specified classes in the given workdir.
+    If no classes are specified, returns field descriptions for all classes.
+    """
+    if not isinstance(catalog, dict):
+        logger.warning("Catalog is not a dictionary. Returning empty field descriptions.")
+        return []
+
+    if className not in catalog:
+        logger.warning(f"Class '{className}' not found in catalog. Returning empty field descriptions.")
+        return []
+
+    catalogClass = catalog[className]
+
+    if "fields" not in catalogClass or not isinstance(catalogClass["fields"], list):
+        logger.warning("Catalog does not contain a valid 'fields' list. Returning empty field descriptions.")
+        return []
+
+    final_fields = trim_empty_fields_catalog(catalogClass.get("fields", []))
+
+    for field in final_fields:
+        keys_to_keep = ["path", "category", "dataType", "sampleValues"]
+        for key in list(field.keys()):
+            if key not in keys_to_keep:
+                del field[key]
+    return final_fields

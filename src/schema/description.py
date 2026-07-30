@@ -1,28 +1,29 @@
 from src.db import ExistDB
 from src.schema.schema import get_template_filepath, NoInstanceError, get_instances_filepaths
-from src.schema.fields import trim_xml_fields
+from src.schema.fields import trim_xml_fields, get_class_field_descriptions
 import logging
 from collections.abc import Sequence
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 
 
 
 logger = logging.getLogger(__name__)
-
+DEFAULT_SAMPLE_COUNT = 1
 
 @dataclass
 class ClassContext:
     name: str
     template: str
     example_instances: list[str]
-
+    field_descriptions: list = field(default_factory=list)
+    
     def to_dict(self, delimiter: str = "\n\n") -> dict:
         data = asdict(self)
         data['instances'] = delimiter.join(self.example_instances)
         
         return data
 
-def get_class_context(db: ExistDB, folder_path: str, samples : int = 2):
+def get_class_context(db: ExistDB, folder_path: str, samples : int = DEFAULT_SAMPLE_COUNT):
     folder_content = db.list_contents(folder_path)
     templateFile = get_template_filepath(folder_content)
 
@@ -42,7 +43,7 @@ def get_class_context(db: ExistDB, folder_path: str, samples : int = 2):
         return ClassContext(
             name=folder_content.path.split("/")[-1],
             template=trim_xml_fields(templateFileContent),
-            example_instances=instanceFileContents
+            example_instances=instanceFileContents,
         )
 
 
@@ -51,7 +52,7 @@ def get_class_context(db: ExistDB, folder_path: str, samples : int = 2):
         return None
     
 
-def get_class_samples(db: ExistDB, instance_folders: Sequence[str], samples : int = 3):
+def get_class_samples(db: ExistDB, instance_folders: Sequence[str], samples : int = DEFAULT_SAMPLE_COUNT):
     """
     Returns a list of sample instances from the given folder path.
     """

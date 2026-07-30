@@ -21,4 +21,7 @@ def detect_relevant_classes(question: str, class_descriptions: dict, llm_config:
         {"question": question, "classes": "\n".join(llm_class_context)}
     )
     response = call_LLM(system_prompt, user_prompt, llm_config)
-    return response.strip().split(",")
+    classes = response.strip().split(",")
+    for i in range(len(classes)):
+        classes[i] = classes[i].strip()
+    return classes

@@ -6,7 +6,7 @@ workdir = "DMSCOLLECTION/MESSARA"
 llm_samples = 2
 
 [generation]
-model="qwen3:14b"
+model="llama3.1:8b"
 provider="ollama"
 temperature=0.1
 num_ctx=8196

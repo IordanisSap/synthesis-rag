@@ -29,10 +29,12 @@ def call_ollama(system_prompt, user_prompt, model_config) -> str | None:
     response: ChatResponse = ollama_chat(
         model=model,
         options={'temperature': model_config.get('temperature', 0.1), 'num_ctx': model_config.get('num_ctx', 2048)},
+        think=False,
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
     )
 
+    print(response.message.content)
     return response.message.content
