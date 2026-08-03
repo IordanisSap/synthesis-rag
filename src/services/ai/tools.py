@@ -1,5 +1,4 @@
 from src.services.ai.llm_client import call_LLM
-from src.schema.description import ClassContext
 from src.services.ai.prompts.registry import PromptBuilder, PromptTemplate
 
 def detect_relevant_classes(question: str, class_descriptions: dict, llm_config: dict) -> list[str]:

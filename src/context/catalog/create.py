@@ -1,35 +1,11 @@
-#!/usr/bin/env python3
 """
-Scans an eXist-db collection for entity folders and builds a compact
-field-value catalog for each one
-
-An immediate child folder F of --root is considered an entity folder only if:
-  1. It contains a resource named exactly "F.xml" (the template - all fields
-     empty), directly inside F.
-  2. It contains at least one subfolder that itself contains at least one
-     .xml resource (the actual data instances).
-Anything else (e.g. a folder with no matching template file, or a folder
-whose subfolders don't have any .xml files) is skipped.
+Builds a compact field-value catalog for each class
 
 For each field/attribute path found (template U instances), it reports:
   - "always-empty"          never populated in the sample
   - "controlled-vocabulary" governed by an sps_vocabulary attribute
   - "enum"                  small, closed set of observed values
   - "free-text"             effectively unbounded (names, ids, uris, dates...)
-
-All eXist-db access is plain HTTP GET, using the same URL pattern and the
-same built-in directory-listing response (exist:collection / exist:resource)
-as your existing ExistDB.list_contents /sps_vocabulary read_document methods. No XQuery
-execution is used anywhere in this script.
-
-Requires: pip install requests
-
-Usage:
-  python build_catalog.py \
-      --url http://localhost:8080/exist \
-      --user admin --password secret \
-      --root /db/apps/messara/data \
-      --output catalog.json
 """
 
 import argparse
@@ -41,17 +17,17 @@ from xml.etree import ElementTree as ET
 import logging
 
 from src.db import ExistDB
-from src.schema.schema import get_class_filepaths
+from src.schema import get_class_filepaths
+from src.context.filtering import (
+    is_noise_attribute,
+    local_name,
+)
 
-DEFAULT_XML_FIELDS_TO_TRIM = set(["admin"])
 
-ENUM_MAX_DISTINCT_DEFAULT = 10  # hard cap on distinct values for "enum"
-CONTROLLED_VOCAB_MAX_DISTINCT_DEFAULT = 10
-ENUM_MAX_RATIO_DEFAULT = 0.3  # distinct/occurrences must also stay under this
-FREE_TEXT_SAMPLES = 3  # how many example values to keep for free-text fields
-
-XSI_NS = "http://www.w3.org/2001/XMLSchema-instance"
-EXIST_NS = "http://exist.sourceforge.net/NS/exist"
+ENUM_MAX_DISTINCT_DEFAULT = 10
+CONTROLLED_VOCAB_MAX_DISTINCT_DEFAULT = 5
+ENUM_MAX_RATIO_DEFAULT = 0.3
+FREE_TEXT_SAMPLES = 3
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2}:\d{2})?$")
 TIME_RE = re.compile(r"^\d{2}:\d{2}:\d{2}$")
@@ -85,14 +61,6 @@ def discover_entities(db: ExistDB, root: str, verbose: bool = True):
             print(f"  found {folder}: {len(instance_files)} instance file(s)")
 
     return entities
-
-
-def local_name(tag: str) -> str:
-    return tag.split("}", 1)[1] if tag.startswith("{") else tag
-
-
-def is_noise_attribute(raw_name: str) -> bool:
-    return raw_name.startswith(f"{{{XSI_NS}}}")
 
 
 def walk(elem, prefix: str, doc_id: str, require_nonempty: bool, out: list):
@@ -265,114 +233,3 @@ def build_catalog(
     return catalog
 
 
-def strip_fields(root, paths_to_remove: set) -> None:
-    """
-    Removes elements/attributes whose catalog-style path is in paths_to_remove.
-    Mirrors the local-name, namespace-agnostic traversal used by walk()
-    in build_catalog.py, so removal stays consistent with however
-    'always-empty' was computed -- including repeated elements.
-    """
-    removals = []  # (parent, child) pairs, detached after the walk completes
-
-    def recurse(elem, prefix, parent):
-        for raw_name in list(elem.attrib.keys()):
-            if is_noise_attribute(raw_name):
-                continue
-            attr_path = f"{prefix}/@{local_name(raw_name)}"
-            if attr_path in paths_to_remove:
-                del elem.attrib[raw_name]
-
-        children = list(elem)
-        if not children:
-            if prefix in paths_to_remove and parent is not None:
-                removals.append((parent, elem))
-            return
-
-        for child in children:
-            child_prefix = (
-                f"{prefix}/{local_name(child.tag)}" if prefix else local_name(child.tag)
-            )
-            recurse(child, child_prefix, elem)
-
-    recurse(root, "", None)
-
-    for parent, child in removals:
-        parent.remove(child)
-
-
-def prune_empty_containers(root) -> None:
-    """
-    Removes elements that ended up empty (no text, no children, no
-    meaningful attributes) after strip_fields has run.
-    """
-
-    def is_empty(elem) -> bool:
-        text_empty = not (elem.text or "").strip()
-        no_children = len(elem) == 0
-        no_real_attrs = not any(not is_noise_attribute(name) for name in elem.attrib)
-        return text_empty and no_children and no_real_attrs
-
-    def recurse(elem):
-        to_remove = []
-        for child in list(elem):
-            recurse(child)
-            if is_empty(child):
-                to_remove.append(child)
-        for child in to_remove:
-            elem.remove(child)
-
-    recurse(root)
-
-
-def trim_xml_fields(
-    xml_str: str, paths_to_remove: set = DEFAULT_XML_FIELDS_TO_TRIM
-) -> str:
-    root = ET.fromstring(xml_str)
-    strip_fields(root, paths_to_remove)
-    prune_empty_containers(root)
-    ET.indent(root, space="  ")
-    return ET.tostring(root, encoding="unicode")
-
-
-def trim_empty_fields_catalog(fields: list) -> list:
-    """
-    Returns a list of fields with always-empty fields removed.
-    """
-    if not isinstance(fields, list):
-        return fields
-
-    return [
-        field_info 
-        for field_info in fields 
-        if field_info.get("category") != "always-empty"
-    ]
-
-
-
-def get_class_field_descriptions(catalog: dict, className: str) -> list:
-    """
-    Returns a list of field descriptions for the specified classes in the given workdir.
-    If no classes are specified, returns field descriptions for all classes.
-    """
-    if not isinstance(catalog, dict):
-        logger.warning("Catalog is not a dictionary. Returning empty field descriptions.")
-        return []
-
-    if className not in catalog:
-        logger.warning(f"Class '{className}' not found in catalog. Returning empty field descriptions.")
-        return []
-
-    catalogClass = catalog[className]
-
-    if "fields" not in catalogClass or not isinstance(catalogClass["fields"], list):
-        logger.warning("Catalog does not contain a valid 'fields' list. Returning empty field descriptions.")
-        return []
-
-    final_fields = trim_empty_fields_catalog(catalogClass.get("fields", []))
-
-    for field in final_fields:
-        keys_to_keep = ["path", "category", "dataType", "sampleValues"]
-        for key in list(field.keys()):
-            if key not in keys_to_keep:
-                del field[key]
-    return final_fields

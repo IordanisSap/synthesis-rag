@@ -1,10 +1,10 @@
 
 from src.db import ExistDB
 import logging
-from src.schema.description import get_class_context, ClassContext
+from src.context.class_context import get_class_context, ClassContext
 from src.services.ai.llm_client import call_LLM
 from src.services.ai.prompts.registry import PromptBuilder, PromptTemplate
-from src.schema.fields import trim_xml_fields, get_class_field_descriptions
+from src.context.catalog.process import get_class_field_descriptions
 
 
 logger = logging.getLogger(__name__)

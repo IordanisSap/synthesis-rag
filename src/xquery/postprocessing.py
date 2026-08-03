@@ -19,9 +19,12 @@ def postprocess_xquery(xquery_string: str, database_config: dict) -> str:
 
 import re
 
-_FIELD = r"@?[A-Za-z_][\w\-]*(?::[A-Za-z_][\w\-]*)?(?:/@?[A-Za-z_][\w\-]*(?::[A-Za-z_][\w\-]*)?)*"
+_VAR = r"\$[A-Za-z_][\w\-]*"
+_STEP = r"@?[A-Za-z_][\w\-]*(?::[A-Za-z_][\w\-]*)?"
+_FIELD = rf"(?:{_VAR}(?:/{_STEP})*|{_STEP}(?:/{_STEP})*)"
+
 _PATTERN = re.compile(
-    rf"([\[(]|\band\b|\bor\b)(\s*)({_FIELD})\s*=\s*"
+    rf"(\[|\(|\band\b|\bor\b|\bwhere\b|\bsatisfies\b)(\s*)({_FIELD})\s*=\s*"
     r"('(?:[^']|'')*'|\"(?:[^\"]|\"\")*\")"
 )
 
@@ -37,8 +40,10 @@ def to_case_insensitive_contains(xquery_string: str) -> str:
     and comparisons it can't confidently anchor are left untouched.
     """
     def _replace(match: re.Match) -> str:
-        boundary, ws, field, literal = match.groups()
-        return f"{boundary}{ws}contains(lower-case({field}), lower-case({literal}))"
+            boundary, ws, field, literal = match.groups()
+            # Use explicit existential quantification (some $i in ... satisfies) 
+            # to handle fields that resolve to a sequence of multiple nodes.
+            return f"{boundary}{ws}(some $i in {field} satisfies contains(lower-case($i), lower-case({literal})))"
 
     return _PATTERN.sub(_replace, xquery_string)
 

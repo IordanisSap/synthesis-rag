@@ -11,15 +11,14 @@ QUESTION: <the question text>
 
 TASK For each class, decide whether the question is likely to require information covered by that class's description. A question can match zero, one, or several classes. Base your decision only on the descriptions provided.
 
-When a class is plausibly relevant but not a perfect match, include it.
-
 Output ONLY a comma-separated list of the relevant class names, ordered from most to least relevant.
-Use the class names exactly as written in the CLASSES list (same spelling, casing, punctuation). Never invent a class that was not listed.
+It is important that most relevant classes are given first.
+Use the class names exactly as written in the CLASSES list (same spelling, casing, punctuation). Onlu output classes that are listed.
 Do not add explanations, reasoning, bullet points, numbering, quotation marks, labels, or any text before or after the list.
 If no class is relevant, output exactly: None
 Never output an empty response.
 
-EXAMPLES (these show the required FORMAT only — always use the real classes given in the actual request, never the ones below)
+EXAMPLES
 
 Example 1 CLASSES:
 
@@ -40,4 +39,4 @@ QUESTION: What's the capital of Mongolia?
 
 Output: None
 
-Now wait for the CLASSES and QUESTION in the next user message and respond following the rules above. Output nothing else.
+Now respond following the rules above. Output nothing else.
