@@ -29,14 +29,3 @@ RestaurantFinder: Finds restaurants near a location, filtered by cuisine or pric
 QUESTION: Is my flight to Chicago delayed, and what's the weather like there right now?
 
 Output: FlightStatus, WeatherLookup
-
-Example 2 CLASSES:
-
-StockPrice: Provides real-time and historical stock prices.
-SportsScores: Provides live scores and schedules for sports games.
-
-QUESTION: What's the capital of Mongolia?
-
-Output: None
-
-Now respond following the rules above. Output nothing else.

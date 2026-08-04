@@ -1,5 +1,5 @@
 
-from src.context.class_context import contextToString
+from src.context.class_context import contextToString, trim_contexts
 from src.workflows.blocks.generate_class_descriptions import generate_class_descriptions, get_class_examples, fill_class_context_fields
 from src.workflows.blocks.generate_xquery import generate_xquery
 from src.workflows.blocks.get_field_descriptions import build_field_descriptions
@@ -62,6 +62,7 @@ def workflow2(question: str, db: ExistDB, workdir: str, config: dict, index_fold
     contexts = get_class_examples(db, workdir, classes=relevant_classes)
 
     contexts = [fill_class_context_fields(context, field_descriptions) for context in contexts]
+    trimmed_str_contexts = trim_contexts(contexts, max_tokens=32000)
 
     # for context in contexts:
     #     print(f"Class: {context.name}")
@@ -70,7 +71,7 @@ def workflow2(question: str, db: ExistDB, workdir: str, config: dict, index_fold
     #     print(f"Field Descriptions: {context.field_descriptions}")
     #     print("\n")
 
-    final_context = "\n".join([contextToString(context) for context in contexts])
+    final_context = "\n".join(trimmed_str_contexts)
     print(final_context)
     # with open("tmp_context.txt", "w", encoding="utf-8") as f:
     #     f.write(final_context)

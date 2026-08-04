@@ -2,12 +2,9 @@
 base_path = "/db"
 workdir = "DMSCOLLECTION/MESSARA"
 
-[schema]
-llm_samples = 2
-
 [generation]
 model="qwen3:14b"
 provider="ollama"
-temperature=0.2
+temperature=0.15
 num_ctx=32784
 num_predict=200

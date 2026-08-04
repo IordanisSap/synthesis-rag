@@ -1,6 +1,6 @@
 from src.db import ExistDB
 from src.context.catalog.process import postprocess_xml_fields
-
+from src.services.ai.token_estimator import estimate_tokens
 from src.schema import get_template_filepath, NoInstanceError, get_instances_filepaths
 import logging
 from collections.abc import Sequence
@@ -37,7 +37,6 @@ def get_class_context(db: ExistDB, folder_path: str, samples : int = DEFAULT_SAM
             error_msg = f"No data instance exists in: {folder_content.path} \n A data instance is required to produce the class description"
             logger.error(error_msg)
             return None                 # TODO: Skip this for now, see later how templates without instances should be handled
-            # raise NoInstanceError(error_msg)
 
         instanceFileContents = get_class_samples(db, instanceFolders, samples)
 
@@ -103,3 +102,61 @@ def contextToString(class_details: ClassContext) -> str:
     context_string = "\n".join(context_parts)
     
     return context_string
+
+
+MAX_CLASS_NUM = 3
+
+def trim_contexts(contexts: list[ClassContext], max_tokens: int) -> list[str]:
+    """
+    Trims the contexts to fit within the specified maximum token limit.
+
+    Args:
+        contexts (list[ClassContext]): A list of ClassContext instances.
+        max_tokens (int): The maximum number of tokens allowed.
+
+    Returns:
+        str: A string representation of the trimmed contexts.
+    """
+    trimmed_contexts = []
+    total_tokens = 0
+
+    for context in contexts:
+        processed_context = trim_context(context)
+        context_str = contextToString(processed_context)
+        context_tokens = estimate_tokens(context_str)
+
+        if total_tokens + context_tokens <= max_tokens and len(trimmed_contexts) < MAX_CLASS_NUM:
+            trimmed_contexts.append(context_str)
+            total_tokens += context_tokens
+        else:
+            break
+
+    return trimmed_contexts
+
+
+ENUM_MAX = 10
+CONTROLLED_VOCAB_MAX = 10
+FREE_TEXT_SAMPLES = 5
+
+def trim_context(context: ClassContext) -> ClassContext:
+    """
+    Trims the field descriptions of a ClassContext to avoid catalog bloat.
+
+    Args:
+        context (ClassContext): An instance of ClassContext.
+
+    Returns:
+        ClassContext: A new instance of ClassContext with trimmed field descriptions.
+    """
+
+    for field in context.field_descriptions:
+        if field["category"] == "enum":
+            max_distinct = ENUM_MAX
+        elif field["category"] == "controlled-vocab":
+            max_distinct = CONTROLLED_VOCAB_MAX
+        else:
+            max_distinct = FREE_TEXT_SAMPLES
+
+        field["sampleValues"] = field["sampleValues"][:max_distinct]
+
+    return context

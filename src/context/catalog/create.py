@@ -23,11 +23,14 @@ from src.context.filtering import (
     local_name,
 )
 
+# Thresholds to avoid catalog bloat
+ENUM_MAX_DISTINCT_DEFAULT = 20
+CONTROLLED_VOCAB_MAX_DISTINCT_DEFAULT = 20
+FREE_TEXT_SAMPLES = 10
 
-ENUM_MAX_DISTINCT_DEFAULT = 10
-CONTROLLED_VOCAB_MAX_DISTINCT_DEFAULT = 5
+# Controls the maximum ratio of distinct values to total occurrences for a field to be considered an enum
 ENUM_MAX_RATIO_DEFAULT = 0.3
-FREE_TEXT_SAMPLES = 3
+
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2}:\d{2})?$")
 TIME_RE = re.compile(r"^\d{2}:\d{2}:\d{2}$")

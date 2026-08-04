@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 
 db = ExistDB(exist_db_settings.url, exist_db_settings.user, exist_db_settings.password)
 
-QUESTION = "Are there archaeological places I can visit in a wheelchair?"
+QUESTION = "What are some names of the objects made from Stone?"
 
 workflow2(QUESTION, db, workdir, config, INDEX_FOLDER)
 
