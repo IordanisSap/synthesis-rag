@@ -44,11 +44,6 @@ logger = logging.getLogger(__name__)
 
 db = ExistDB(exist_db_settings.url, exist_db_settings.user, exist_db_settings.password)
 
-QUESTION = "What are some names of the objects made from Stone?"
+QUESTION = "Find the names of all persons working in ΙΤΕ"
 
 workflow2(QUESTION, db, workdir, config, INDEX_FOLDER)
-
-
-# QUESTION = "Can I visit Μονή Παναγίας Καλυβιανής by car?"
-# QUESTION = "Find the names of all persons working in ΙΤΕ"
-# workflow1(QUESTION, db, workdir, config, INDEX_FOLDER)
