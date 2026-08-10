@@ -3,8 +3,8 @@ base_path = "/db"
 workdir = "DMSCOLLECTION/MESSARA"
 
 [generation]
-model="qwen3:14b"
-provider="ollama"
+model="Qwen/Qwen3-14B-FP8"
+provider="vllm"
 temperature=0.15
-num_ctx=32784
+num_ctx=16384
 num_predict=200

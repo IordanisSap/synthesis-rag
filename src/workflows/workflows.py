@@ -72,7 +72,7 @@ def workflow2(question: str, db: ExistDB, workdir: str, config: dict, index_fold
     #     print("\n")
 
     final_context = "\n".join(trimmed_str_contexts)
-    print(final_context)
+    # print(final_context)
     # with open("tmp_context.txt", "w", encoding="utf-8") as f:
     #     f.write(final_context)
     # exit()
