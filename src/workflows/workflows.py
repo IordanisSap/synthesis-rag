@@ -9,6 +9,8 @@ from src.index.index import save_to_index, load_from_index
 from src.xquery.postprocessing import postprocess_xquery
 
 from src.db import ExistDB
+from src.services.ai.token_estimator import estimate_tokens
+
 
 def workflow1(question: str, db: ExistDB, workdir: str, config: dict, index_folder: str):
     descs = load_from_index("class_descriptions", workdir.split("/")[-1], index_folder)
@@ -62,7 +64,7 @@ def workflow2(question: str, db: ExistDB, workdir: str, config: dict, index_fold
     contexts = get_class_examples(db, workdir, classes=relevant_classes)
 
     contexts = [fill_class_context_fields(context, field_descriptions) for context in contexts]
-    trimmed_str_contexts = trim_contexts(contexts, max_tokens=32000)
+    trimmed_str_contexts = trim_contexts(contexts, max_tokens=config["generation"]["num_ctx"] - 1000)
 
     # for context in contexts:
     #     print(f"Class: {context.name}")
@@ -75,6 +77,8 @@ def workflow2(question: str, db: ExistDB, workdir: str, config: dict, index_fold
     # print(final_context)
     # with open("tmp_context.txt", "w", encoding="utf-8") as f:
     #     f.write(final_context)
+
+    # print(estimate_tokens(final_context))
     # exit()
     xquery = generate_xquery(context=final_context, 
                         question=question, 

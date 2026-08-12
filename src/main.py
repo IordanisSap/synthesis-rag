@@ -44,6 +44,6 @@ logger = logging.getLogger(__name__)
 
 db = ExistDB(exist_db_settings.url, exist_db_settings.user, exist_db_settings.password)
 
-QUESTION = "Can I get inside Λαβύρινθος, the ancient quarry in Messara?"
+QUESTION = "Are there findings made from silver?"
 
 print(workflow2(QUESTION, db, workdir, config, INDEX_FOLDER))
