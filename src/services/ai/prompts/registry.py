@@ -25,6 +25,11 @@ class PromptTemplate(Enum):
         user_path="select_classes/select_classes_user.md"
     )
 
+    RESPOND_TO_QUESTION = PromptBundle(
+        system_path="response/response_system.md",
+        user_path="response/response_user.md"
+    )
+
 class PromptBuilder:
     @staticmethod
     def build_messages(procedure: PromptTemplate, variables: dict) -> tuple[str, str]:
