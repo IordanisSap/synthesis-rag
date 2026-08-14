@@ -38,8 +38,9 @@ def get_class_field_descriptions(catalog: dict, className: str) -> list:
         return []
 
     final_fields = postprocess_catalog_fields(catalogClass["fields"])
-    keys_to_keep = ["category", "dataType", "sampleValues"]
-    
+    # keys_to_keep = ["category", "dataType", "sampleValues"]
+    keys_to_keep = ["dataType", "sampleValues"]
+
     return [
         {
             "field": f["path"], 

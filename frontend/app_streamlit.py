@@ -80,8 +80,8 @@ QUESTION = "Are there findings made from silver?"
 # TODO: wire these up to your real objects however you currently build them
 # from your_project import db, workdir, config, index_folder
 
-st.set_page_config(page_title="Synthesis RAG Chatbot", page_icon="🤖")
-st.title("Synthesis RAG Chatbot")
+st.set_page_config(page_title="Synthesis RAG Chatbot - MESSARA", page_icon="🤖")
+st.title("Synthesis RAG Chatbot - MESSARA")
 
 if "history" not in st.session_state:
     st.session_state.history = []  # list of {"role": ..., "content": ...}

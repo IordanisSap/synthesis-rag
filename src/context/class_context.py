@@ -97,7 +97,7 @@ def contextToString(class_details: ClassContext) -> str:
 
     if class_details.field_descriptions:
         field_info = ', '.join(json.dumps(field, ensure_ascii=False) for field in class_details.field_descriptions)
-        context_parts.append(f"Field Descriptions: {field_info}")
+        context_parts.append(f"Field Descriptions with examples: {field_info} \nUse the sample values ONLY as a reference. They can be any value of the same data type.")
     
     context_string = "\n".join(context_parts)
     
@@ -137,6 +137,7 @@ def trim_contexts(contexts: list[ClassContext], max_tokens: int) -> list[str]:
 ENUM_MAX = 10
 CONTROLLED_VOCAB_MAX = 10
 FREE_TEXT_SAMPLES = 5
+DEFAULT = 10
 
 def trim_context(context: ClassContext) -> ClassContext:
     """
@@ -150,7 +151,9 @@ def trim_context(context: ClassContext) -> ClassContext:
     """
 
     for field in context.field_descriptions:
-        if field["category"] == "enum":
+        if field.get("category") == None:
+            max_distinct = DEFAULT
+        elif field["category"] == "enum":
             max_distinct = ENUM_MAX
         elif field["category"] == "controlled-vocab":
             max_distinct = CONTROLLED_VOCAB_MAX

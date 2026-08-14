@@ -21,7 +21,7 @@ def save_to_index(key: str, value: Any, collection: str, index_folder: str) -> N
     data[key] = value
     
     with open(file_path, 'w') as f:
-        json.dump(data, f, indent=4)
+        json.dump(data, f, indent=4, ensure_ascii=False)
     
 
 def load_from_index(key: str, collection: str, index_folder: str) -> Any:
