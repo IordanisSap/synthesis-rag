@@ -6,7 +6,7 @@ import logging
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import HttpUrl
 
-from src.workflows.workflows import run_rag_pipeline
+from src.workflows.workflows import run_rag_pipeline, run_rag_pipeline2
 
 
 class ExistDBSettings(BaseSettings):
@@ -43,7 +43,13 @@ logger = logging.getLogger(__name__)
 
 
 db = ExistDB(exist_db_settings.url, exist_db_settings.user, exist_db_settings.password)
-
 QUESTION = "Υπάρχουν αντικείμενα από χρυσό στο μουσείο;"
 
-print(list(run_rag_pipeline(QUESTION, db, workdir, config, INDEX_FOLDER)))
+# print(list(run_rag_pipeline(QUESTION, db, workdir, config, INDEX_FOLDER)))
+
+
+
+print(list(run_rag_pipeline2(QUESTION, db, workdir, config, INDEX_FOLDER)))
+
+
+

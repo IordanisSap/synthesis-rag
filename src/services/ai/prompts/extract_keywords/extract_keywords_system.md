@@ -1,0 +1,2 @@
+You will be given a question and your task is to extract only the necessary keywords from the question, which will be used to search a database. If there are multiple important keywords, separate them with commas.
+ONLY extract keywords that will be useful for search and avoid generic terms and words.

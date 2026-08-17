@@ -162,6 +162,99 @@ class ExistDB:
                 
                 put_file(local_file_path, remote_url)
 
+    def ensure_substring_index(self, collection: str) -> bool:
+        """
+        Creates a generic Range Index to optimize exact substring searches.
+        Range indexes natively support the contains() function.
+        """
+        config_collection = f"/db/system/config/db/{collection.removeprefix('/db').lstrip('/')}"
+        config_file = f"{config_collection}/collection.xconf"
+
+        try:
+            contents = self.list_contents(config_collection)
+            if "collection.xconf" in contents.files:
+                return True
+        except Exception:
+            pass 
+
+        # Using a default range index for xs:string optimizes standard XPath string
+        # functions like contains(), starts-with(), and ends-with() across the database.
+        xconf = """<collection xmlns="http://exist-db.org/collection-config/1.0">
+            <index>
+                <range>
+                    <create qname="*" type="xs:string" collation="?lang=el;strength=primary"/>
+                </range>
+            </index>
+        </collection>"""
+
+        endpoint = f"{self.url}/{config_file.removeprefix('/db').lstrip('/')}"
+        resp = requests.put(endpoint,
+                            auth=self.auth, 
+                            data=xconf.encode("utf-8"),
+                            headers={"Content-Type": "application/xml"})
+        
+        if resp.status_code not in (200, 201):
+            return False 
+
+        self.execute_xquery(f'xmldb:reindex("{collection}")')
+        return True
+
+    def substring_search(self, query: str, collection: str, field: str | None = None) -> str:
+        # Preprocessing: Just strip accidental leading/trailing spaces. 
+        # You do NOT need to lowercase or strip tones in Python anymore!
+        cleaned_query = query.strip()
+        
+        safe_query = cleaned_query.replace("&", "&amp;").replace('"', '&quot;').replace("'", "&apos;")
+        
+        if field:
+            target_path = f"//*[local-name()='{field}']"
+        else:
+            target_path = "/*"
+
+        # The third argument tells the database to evaluate the text dynamically ignoring tones and case
+        xquery = f"""
+        for $hit in collection('{collection}'){target_path}[contains(., "{safe_query}", "?lang=el;strength=primary")]
+        return $hit
+        """
+        
+        return self.execute_xquery(xquery)
+
+    def multiple_substring_search(self, keywords: list[str], collection: str, field: str | None = None, partial_match: bool = False) -> str:
+        """
+        Searches for documents based on a list of keywords.
+        If partial_match is False (default), returns documents containing ALL keywords.
+        If partial_match is True, returns documents containing AT LEAST ONE keyword.
+        """
+        # --- SAFETY CHECK ---
+        # If the LLM returns no keywords, return empty results immediately
+        # to avoid generating invalid XQuery like `/*[]`
+        if not keywords:
+            return ""
+
+        if field:
+            target_path = f"//*[local-name()='{field}']"
+        else:
+            target_path = "/*"
+
+        # Build the XQuery condition dynamically for every keyword
+        conditions = []
+        for kw in keywords:
+            cleaned = kw.strip().replace("&", "&amp;").replace('"', '&quot;').replace("'", "&apos;")
+            conditions.append(f'contains(., "{cleaned}", "?lang=el;strength=primary")')
+        
+        # Toggle between AND or OR logic
+        if partial_match:
+            xquery_filter = " or ".join(conditions)
+        else:
+            xquery_filter = " and ".join(conditions)
+
+        xquery = f"""
+        for $hit in collection('{collection}'){target_path}[{xquery_filter}]
+        return $hit
+        """
+        
+        return self.execute_xquery(xquery)
+
 
 
 

@@ -1,6 +1,5 @@
 from xml.etree import ElementTree as ET
 
-
 XSI_NS = "http://www.w3.org/2001/XMLSchema-instance"
 EXIST_NS = "http://exist.sourceforge.net/NS/exist"
 DEFAULT_XML_FIELDS_TO_TRIM = ["admin"]
@@ -53,25 +52,37 @@ def strip_fields(root, paths_to_remove: set[str]) -> None:
             parent.remove(child)
 
 
-def prune_empty_containers(root) -> None:
+
+
+def extract_class_names(raw_xml_string: str) -> list[str]:
     """
-    Removes elements that ended up empty (no text, no children, no
-    meaningful attributes) after strip_fields has run.
+    Parses the raw eXist-db XML response and extracts the root tag name 
+    (class name) of each returned document.
     """
-
-    def is_empty(elem) -> bool:
-        text_empty = not (elem.text or "").strip()
-        no_children = len(elem) == 0
-        no_real_attrs = not any(not is_noise_attribute(name) for name in elem.attrib)
-        return text_empty and no_children and no_real_attrs
-
-    def recurse(elem):
-        to_remove = []
-        for child in list(elem):
-            recurse(child)
-            if is_empty(child):
-                to_remove.append(child)
-        for child in to_remove:
-            elem.remove(child)
-
-    recurse(root)
+    if not raw_xml_string or not raw_xml_string.strip():
+        return []
+        
+    # Wrap in a dummy root to ensure valid XML parsing when multiple documents are returned
+    safe_xml = f"<results>{raw_xml_string}</results>"
+    class_names = []
+    
+    try:
+        root = ET.fromstring(safe_xml)
+        
+        for element in root:
+            # eXist-db's REST API sometimes wraps the output in an <exist:result> tag.
+            # If we hit that wrapper, we iterate through its children instead.
+            if "result" in element.tag:
+                for hit in element:
+                    # hit.tag might look like '{http://namespace.com}Organization'
+                    # We split on '}' and take the last part to get just 'Organization'
+                    class_name = hit.tag.split('}')[-1]
+                    class_names.append(class_name)
+            else:
+                class_name = element.tag.split('}')[-1]
+                class_names.append(class_name)
+                
+    except ET.ParseError as e:
+        print(f"XML Parsing Error: {e}")
+        
+    return class_names

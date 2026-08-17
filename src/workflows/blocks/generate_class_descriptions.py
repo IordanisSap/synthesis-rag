@@ -1,26 +1,28 @@
 
-from src.db import ExistDB
 import logging
+import json
+
+from src.db import ExistDB
 from src.context.class_context import get_class_context, ClassContext
 from src.services.ai.llm_client import call_LLM
 from src.services.ai.prompts.registry import PromptBuilder, PromptTemplate
-from src.context.catalog.process import get_class_field_descriptions
+from src.context.field_catalog.process import get_class_field_descriptions
 
+# get_class_field_descriptions
 
 logger = logging.getLogger(__name__)
 
-def generate_class_descriptions(db: ExistDB, workdir: str, llm_config: dict) -> dict[str, str]:
-    class_contexts = get_class_examples(db, workdir)
+def generate_class_descriptions(class_contexts, llm_config: dict) -> dict[str, str]:
     descriptions = {}
     for class_context in class_contexts:
-        system, user = PromptBuilder.build_messages(PromptTemplate.SUMMARIZE_CLASS, class_context.to_dict())
+        system, user = PromptBuilder.build_messages(PromptTemplate.SUMMARIZE_CLASS, {"name": class_context.name, "template": class_context.template, "fields": json.dumps(class_context.field_descriptions, ensure_ascii=False)})
         response = call_LLM(system, user, llm_config)
         descriptions[class_context.name] = response
     return descriptions
             
 
     
-def get_class_examples(db: ExistDB, workdir: str, classes: list[str] | None = None) -> list[ClassContext]:
+def build_class_contexts(db: ExistDB, workdir: str, field_descriptions: dict, classes: list[str] | None = None) -> list[ClassContext]:
     contents = db.list_contents(workdir)
     
     if len(contents.files) > 0:
@@ -33,6 +35,7 @@ def get_class_examples(db: ExistDB, workdir: str, classes: list[str] | None = No
             continue
         class_context = get_class_context(db, folder_path)
         if class_context is not None:
+            class_context.field_descriptions = fill_class_context_fields(class_context, field_descriptions).field_descriptions
             contexts.append(class_context)
         else:
             logger.warning(f"Skipping class {class_folder} due to missing template or instances")

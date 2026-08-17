@@ -1,5 +1,5 @@
 from src.db import ExistDB
-from src.context.catalog.process import postprocess_xml_fields
+from src.context.field_catalog.process import postprocess_xml_fields
 from src.services.ai.token_estimator import estimate_tokens
 from src.schema import get_template_filepath, NoInstanceError, get_instances_filepaths
 import logging
@@ -9,18 +9,20 @@ from typing import Any
 import json
 
 logger = logging.getLogger(__name__)
-DEFAULT_SAMPLE_COUNT = 3
+DEFAULT_SAMPLE_COUNT = 0
 
 @dataclass
 class ClassContext:
     name: str
     template: str
-    example_instances: list[str]
     field_descriptions: list[dict[str, Any]] = field(default_factory=list)
+    example_instances: list[str] = field(default_factory=list)
+
     
     def to_dict(self, delimiter: str = "\n\n") -> dict:
         data = asdict(self)
         data['instances'] = delimiter.join(self.example_instances)
+        data['field_descriptions'] = json.dumps(self.field_descriptions, ensure_ascii=False)
         
         return data
 
@@ -50,7 +52,7 @@ def get_class_context(db: ExistDB, folder_path: str, samples : int = DEFAULT_SAM
     else:
         logger.info(f"{folder_path} does not contain a template and will not be indexed)")
         return None
-    
+
 
 def get_class_samples(db: ExistDB, instance_folders: Sequence[str], samples : int = DEFAULT_SAMPLE_COUNT):
     """
@@ -160,6 +162,7 @@ def trim_context(context: ClassContext) -> ClassContext:
         else:
             max_distinct = FREE_TEXT_SAMPLES
 
-        field["sampleValues"] = field["sampleValues"][:max_distinct]
+        if field.get("sampleValues"):
+            field["sampleValues"] = field["sampleValues"][:max_distinct]
 
     return context

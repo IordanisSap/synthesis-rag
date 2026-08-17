@@ -1,7 +1,7 @@
 
 from src.db import ExistDB
 import logging
-from src.context.catalog.create import build_catalog
+from src.context.field_catalog.create import build_catalog
 
 
 logger = logging.getLogger(__name__)

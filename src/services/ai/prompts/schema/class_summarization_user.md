@@ -2,8 +2,8 @@ Describe the {name} class template
 
 {template}
 
-Class example instances
+Class fields
 
-{instances}
+{fields}
 
-Reply with one sentence only
+Reply with the description

@@ -39,7 +39,8 @@ def get_class_field_descriptions(catalog: dict, className: str) -> list:
 
     final_fields = postprocess_catalog_fields(catalogClass["fields"])
     # keys_to_keep = ["category", "dataType", "sampleValues"]
-    keys_to_keep = ["dataType", "sampleValues"]
+    # keys_to_keep = ["dataType", "sampleValues"]
+    keys_to_keep = ["dataType"]
 
     return [
         {
@@ -186,5 +187,4 @@ def postprocess_catalog_fields(
                 value if len(value) <= max_length else value[:max_length] + "..."
                 for value in field_info["sampleValues"]
             ]
-
     return filtered_fields

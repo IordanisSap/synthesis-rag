@@ -1,7 +1,7 @@
 from src.services.ai.prompts.registry import PromptBuilder, PromptTemplate
 from src.services.ai.llm_client import call_LLM
 
-def generate_xquery(context: str, question: str, llm_config: dict) -> str:
+def generate_xquery(context: str, question: str, classes: list[str], llm_config: dict) -> str:
     """
     Generates an XQuery based on the provided context and question.
     
@@ -16,8 +16,8 @@ def generate_xquery(context: str, question: str, llm_config: dict) -> str:
     """
     system_prompt, user_prompt = PromptBuilder.build_messages(
         PromptTemplate.GENERATE_XQUERY,
-        {"context": context, "question": question}
+        {"context": context, "classes":"\n".join(classes), "question": question}
     )
-    
+
     response = call_LLM(system_prompt, user_prompt, llm_config)
     return response

@@ -1,15 +1,18 @@
 
+from src.db import ExistDB
 from src.context.class_context import trim_contexts
-from src.workflows.blocks.generate_class_descriptions import generate_class_descriptions, get_class_examples, fill_class_context_fields
+from src.workflows.blocks.generate_class_descriptions import generate_class_descriptions, build_class_contexts
 from src.workflows.blocks.generate_xquery import generate_xquery
 from src.workflows.blocks.get_field_descriptions import build_field_descriptions
 from src.workflows.blocks.answer_question import answer_question
+from src.workflows.blocks.extract_keywords import extract_keywords
 
 from src.services.ai.tools import detect_relevant_classes
 from src.services.ai.token_estimator import estimate_tokens
 
 from src.index.index import save_to_index, load_from_index
 from src.xquery.postprocessing import postprocess_xquery
+from src.context.filtering import extract_class_names
 
 from dataclasses import dataclass
 from typing import Any, Iterator, Literal
@@ -32,7 +35,7 @@ class PipelineEvent:
  
 def run_rag_pipeline(
     question: str,
-    db,
+    db: ExistDB,
     workdir: str,
     config: dict,
     index_folder: str,
@@ -46,16 +49,6 @@ def run_rag_pipeline(
     workdir_name = workdir.split("/")[-1]
  
     try:
-        # --- class descriptions ------------------------------------------
-        yield PipelineEvent("status", "Loading class descriptions...")
-        class_descriptions = load_from_index("class_descriptions", workdir_name, index_folder)
-        print(estimate_tokens(str(class_descriptions)))
-        if not class_descriptions:
-            yield PipelineEvent("status", "No cached class descriptions found, generating them...")
-            class_descriptions = generate_class_descriptions(db, workdir, config["generation"])
-            save_to_index("class_descriptions", class_descriptions, workdir_name, index_folder)
-        # yield PipelineEvent("result", "Class descriptions ready", data=class_descriptions)
- 
         # --- field descriptions -------------------------------------------
         yield PipelineEvent("status", "Loading field descriptions...")
         field_descriptions = load_from_index("field_descriptions", workdir_name, index_folder)
@@ -63,7 +56,25 @@ def run_rag_pipeline(
             yield PipelineEvent("status", "No cached field descriptions found, generating them...")
             field_descriptions = build_field_descriptions(db, workdir)
             save_to_index("field_descriptions", field_descriptions, workdir_name, index_folder)
-        yield PipelineEvent("result", "Field descriptions ready")
+        yield PipelineEvent("status", "Field descriptions ready")
+
+        # --- context building ------------------------------------------------
+        contexts = build_class_contexts(db, workdir, field_descriptions)
+
+
+        # --- class descriptions ------------------------------------------
+        yield PipelineEvent("status", "Loading class descriptions...")
+        class_descriptions = load_from_index("class_descriptions", workdir_name, index_folder)
+        if not class_descriptions:
+            yield PipelineEvent("status", "No cached class descriptions found, generating them...")
+            class_descriptions = generate_class_descriptions(contexts, config["generation"])
+            save_to_index("class_descriptions", class_descriptions, workdir_name, index_folder)
+
+        yield PipelineEvent("result", "Class descriptions ready", data=[
+            (cd[:20] + "...") if isinstance(cd, str) and len(cd) > 20 else cd
+            for cd in class_descriptions
+        ])
+ 
  
         # --- relevant classes ----------------------------------------------
         yield PipelineEvent("status", "Selecting relevant classes...")
@@ -75,22 +86,13 @@ def run_rag_pipeline(
         relevant_classes = relevant_classes[:3]
         yield PipelineEvent("result", "Relevant classes selected", data=relevant_classes)
  
-        # --- context building ------------------------------------------------
-        # yield PipelineEvent("status", "Fetching examples for the selected classes...")
-        contexts = get_class_examples(db, workdir, classes=relevant_classes)
- 
-        # yield PipelineEvent("status", "Filling in field context...")
-        contexts = [fill_class_context_fields(context, field_descriptions) for context in contexts]
- 
-        # yield PipelineEvent("status", "Trimming context to fit the model's context window...")
         trimmed_str_contexts = trim_contexts(contexts, max_tokens=config["generation"]["num_ctx"] - 1000)
         final_context = "\n".join(trimmed_str_contexts)
         print(estimate_tokens(final_context))
-        # yield PipelineEvent("result", "Context ready", data=final_context)
  
         # --- xquery generation ---------------------------------------------
         yield PipelineEvent("status", "Generating XQuery...")
-        xquery = generate_xquery(context=final_context, question=question, llm_config=config["generation"])
+        xquery = generate_xquery(context=final_context, question=question, classes=relevant_classes, llm_config=config["generation"])
 
         yield PipelineEvent("result", "Raw XQuery generated", data=xquery)
 
@@ -107,5 +109,76 @@ def run_rag_pipeline(
         
         yield PipelineEvent("final", "Done", data=answer)
  
-    except Exception as exc:  # noqa: BLE001 - surface any failure to the frontend
+    except Exception as exc:  # surface any failure to the frontend
+        yield PipelineEvent("error", "Pipeline failed", data=str(exc))
+
+
+
+
+def run_rag_pipeline2(
+    question: str,
+    db: ExistDB,
+    workdir: str,
+    config: dict,
+    index_folder: str,
+) -> Iterator[PipelineEvent]:
+    """
+    Runs the full RAG pipeline, yielding a PipelineEvent after each
+    meaningful step. The caller just iterates over this generator and
+    renders each event as it arrives — no changes needed here when you
+    swap frontends.
+    """
+    workdir_name = workdir.split("/")[-1]
+    try:
+
+        yield PipelineEvent("status", "Ensuring index presence...")
+        db.ensure_substring_index(workdir)
+
+        yield PipelineEvent("status", "Extracting keywords...")
+        keywords = extract_keywords(question, config["generation"])
+        yield PipelineEvent("result", "Extracted keywords", data=keywords)
+
+        yield PipelineEvent("status", "Searching the database...")
+        res = db.multiple_substring_search(keywords, workdir)
+
+        relevant_classes = list(set(extract_class_names(res)))
+        yield PipelineEvent("result", "Relevant classes selected", data=relevant_classes)
+ 
+
+
+
+        # --- field descriptions -------------------------------------------
+        yield PipelineEvent("status", "Loading field descriptions...")
+        field_descriptions = load_from_index("field_descriptions", workdir_name, index_folder)
+        if not field_descriptions:
+            yield PipelineEvent("status", "No cached field descriptions found, generating them...")
+            field_descriptions = build_field_descriptions(db, workdir)
+            save_to_index("field_descriptions", field_descriptions, workdir_name, index_folder)
+        yield PipelineEvent("status", "Field descriptions ready")
+
+        contexts = build_class_contexts(db, workdir, field_descriptions)
+
+        trimmed_str_contexts = trim_contexts(contexts, max_tokens=config["generation"]["num_ctx"] - 1000)
+        final_context = "\n".join(trimmed_str_contexts)
+ 
+        # --- xquery generation ---------------------------------------------
+        yield PipelineEvent("status", "Generating XQuery...")
+        xquery = generate_xquery(context=final_context, question=question, classes=relevant_classes, llm_config=config["generation"])
+
+        yield PipelineEvent("result", "Raw XQuery generated", data=xquery)
+
+        xquery = postprocess_xquery(xquery, config["database"])
+        yield PipelineEvent("result", "Postprocessed XQuery generated", data=xquery)
+ 
+        # --- execution ------------------------------------------------------
+        yield PipelineEvent("status", "Running query against the database...")
+        db_result = db.execute_xquery(xquery)
+
+        # --- answer generation -------------------------------------------------
+        yield PipelineEvent("status", "Generating final answer...")
+        answer = answer_question(context=db_result, question=question, llm_config=config["generation"])
+        
+        yield PipelineEvent("final", "Done", data=answer)
+ 
+    except Exception as exc:  # surface any failure to the frontend
         yield PipelineEvent("error", "Pipeline failed", data=str(exc))

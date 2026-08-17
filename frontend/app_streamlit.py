@@ -20,7 +20,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 
-from src.workflows.workflows import run_rag_pipeline
+from src.workflows.workflows import run_rag_pipeline2
 
 
 
@@ -102,7 +102,7 @@ if question:
         status_box = st.status("Working on it...", expanded=True)
         final_answer = None
 
-        for event in run_rag_pipeline(question, db, workdir, config, index_folder):
+        for event in run_rag_pipeline2(question, db, workdir, config, index_folder):
             if event.type == "status":
                 status_box.write(event.message)
 

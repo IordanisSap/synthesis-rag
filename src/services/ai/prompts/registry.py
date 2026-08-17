@@ -30,6 +30,11 @@ class PromptTemplate(Enum):
         user_path="response/response_user.md"
     )
 
+    EXTRACT_KEYWORDS = PromptBundle(
+        system_path="extract_keywords/extract_keywords_system.md",
+        user_path="extract_keywords/extract_keywords_user.md"
+    )
+
 class PromptBuilder:
     @staticmethod
     def build_messages(procedure: PromptTemplate, variables: dict) -> tuple[str, str]:
