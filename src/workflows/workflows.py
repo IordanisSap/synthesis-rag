@@ -12,7 +12,7 @@ from src.services.ai.token_estimator import estimate_tokens
 
 from src.index.index import save_to_index, load_from_index
 from src.xquery.postprocessing import postprocess_xquery
-from src.context.filtering import extract_class_names
+from src.context.filtering import extract_class_names, extract_matching_fields
 
 from dataclasses import dataclass
 from typing import Any, Iterator, Literal
@@ -135,17 +135,23 @@ def run_rag_pipeline2(
         db.ensure_substring_index(workdir)
 
         yield PipelineEvent("status", "Extracting keywords...")
-        keywords = extract_keywords(question, config["generation"])
+        # keywords = extract_keywords(question, config["generation"])
+
+        keywords = ['Ο Δίσκος της Φαιστού']
         yield PipelineEvent("result", "Extracted keywords", data=keywords)
 
         yield PipelineEvent("status", "Searching the database...")
-        res = db.multiple_substring_search(keywords, workdir)
+        res = db.multiple_string_search(keywords, workdir, partial_match=True)
+
+        matching_fields = extract_matching_fields(res, keywords)
+        print(matching_fields)
+        yield PipelineEvent("result", "Extracted matching fields", data=matching_fields)
 
         relevant_classes = list(set(extract_class_names(res)))
         yield PipelineEvent("result", "Relevant classes selected", data=relevant_classes)
- 
 
-
+        print(relevant_classes)
+        exit()
 
         # --- field descriptions -------------------------------------------
         yield PipelineEvent("status", "Loading field descriptions...")
@@ -156,11 +162,12 @@ def run_rag_pipeline2(
             save_to_index("field_descriptions", field_descriptions, workdir_name, index_folder)
         yield PipelineEvent("status", "Field descriptions ready")
 
-        contexts = build_class_contexts(db, workdir, field_descriptions)
+        contexts = build_class_contexts(db, workdir, field_descriptions, classes=relevant_classes)
 
         trimmed_str_contexts = trim_contexts(contexts, max_tokens=config["generation"]["num_ctx"] - 1000)
         final_context = "\n".join(trimmed_str_contexts)
- 
+
+
         # --- xquery generation ---------------------------------------------
         yield PipelineEvent("status", "Generating XQuery...")
         xquery = generate_xquery(context=final_context, question=question, classes=relevant_classes, llm_config=config["generation"])

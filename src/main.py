@@ -43,7 +43,8 @@ logger = logging.getLogger(__name__)
 
 
 db = ExistDB(exist_db_settings.url, exist_db_settings.user, exist_db_settings.password)
-QUESTION = "Υπάρχουν αντικείμενα από χρυσό στο μουσείο;"
+# QUESTION = "Υπάρχουν αντικείμενα από χρυσό στο μουσείο;"
+QUESTION = "πότε χρονολογείται ο δίσκος της Φαιστού?"
 
 # print(list(run_rag_pipeline(QUESTION, db, workdir, config, INDEX_FOLDER)))
 

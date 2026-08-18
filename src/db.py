@@ -1,3 +1,5 @@
+import re
+
 import requests
 from requests.auth import HTTPBasicAuth
 import os
@@ -162,46 +164,79 @@ class ExistDB:
                 
                 put_file(local_file_path, remote_url)
 
+    def ensure_collection_exists(self, collection_path: str):
+        """
+        Iteratively ensures that a collection hierarchy exists in eXist-db, 
+        creating any missing collections along the path.
+        """
+        parts = collection_path.strip('/').split('/')
+        current_path = ""
+        
+        for part in parts:
+            if current_path:
+                parent = f"/{current_path}"
+                current_path = f"{current_path}/{part}"
+                
+                # XQuery to check if collection exists, and create it if it doesn't
+                query = f"""
+                xquery version "3.1";
+                if (xmldb:collection-available("{current_path}")) then ()
+                else xmldb:create-collection("{parent}", "{part}")
+                """
+                self.execute_xquery(query)
+            else:
+                # First iteration (usually just 'db')
+                current_path = part
+
     def ensure_substring_index(self, collection: str) -> bool:
         """
-        Creates a generic Range Index to optimize exact substring searches.
-        Range indexes natively support the contains() function.
+        Creates a Lucene full-text index to support keyword/phrase search via
+        ft:query(), using a Greek-aware analyzer (case + diacritic folding,
+        stemming, stopwords).
         """
         config_collection = f"/db/system/config/db/{collection.removeprefix('/db').lstrip('/')}"
         config_file = f"{config_collection}/collection.xconf"
+
+        print(f"Ensuring index presence for collection: {config_file}")
 
         try:
             contents = self.list_contents(config_collection)
             if "collection.xconf" in contents.files:
                 return True
         except Exception:
-            pass 
+            pass
 
-        # Using a default range index for xs:string optimizes standard XPath string
-        # functions like contains(), starts-with(), and ends-with() across the database.
+        # 1. FORCE THE CREATION OF THE DIRECTORIES
+        self.ensure_collection_exists(config_collection)
+
         xconf = """<collection xmlns="http://exist-db.org/collection-config/1.0">
             <index>
-                <range>
-                    <create qname="*" type="xs:string" collation="?lang=el;strength=primary"/>
-                </range>
+                <!-- avoid double-indexing everything via the legacy full-text index -->
+                <fulltext default="none" attributes="false"/>
+                <lucene>
+                    <analyzer class="org.apache.lucene.analysis.el.GreekAnalyzer"/>
+                    <text match="//*"/>
+                </lucene>
             </index>
         </collection>"""
 
+        # 2. PROPERLY STRIP /db TO AVOID DOUBLE DIRECTORY MAPPING
         endpoint = f"{self.url}/{config_file.removeprefix('/db').lstrip('/')}"
-        resp = requests.put(endpoint,
-                            auth=self.auth, 
-                            data=xconf.encode("utf-8"),
-                            headers={"Content-Type": "application/xml"})
         
+        resp = requests.put(endpoint,
+            auth=self.auth,
+            data=xconf.encode("utf-8"),
+            headers={"Content-Type": "application/xml"})
+            
         if resp.status_code not in (200, 201):
-            return False 
+            logger.error(f"Failed to push xconf: {resp.status_code} - {resp.text}")
+            return False
 
-        self.execute_xquery(f'xmldb:reindex("{collection}")')
+        print(self.execute_xquery(f'xmldb:reindex("{collection}")'))
         return True
 
     def substring_search(self, query: str, collection: str, field: str | None = None) -> str:
         # Preprocessing: Just strip accidental leading/trailing spaces. 
-        # You do NOT need to lowercase or strip tones in Python anymore!
         cleaned_query = query.strip()
         
         safe_query = cleaned_query.replace("&", "&amp;").replace('"', '&quot;').replace("'", "&apos;")
@@ -219,15 +254,16 @@ class ExistDB:
         
         return self.execute_xquery(xquery)
 
-    def multiple_substring_search(self, keywords: list[str], collection: str, field: str | None = None, partial_match: bool = False) -> str:
+    def multiple_string_search(self, keywords: list[str], collection: str, field: str | None = None, partial_match: bool = False) -> str:
         """
-        Searches for documents based on a list of keywords.
+        Searches for documents based on a list of keywords, via eXist's Lucene
+        full-text index (ft:query) instead of contains().
         If partial_match is False (default), returns documents containing ALL keywords.
         If partial_match is True, returns documents containing AT LEAST ONE keyword.
+
+        Note: matching is token/phrase-based (case + diacritic folding, Greek
+        stemming), not raw substring matching.
         """
-        # --- SAFETY CHECK ---
-        # If the LLM returns no keywords, return empty results immediately
-        # to avoid generating invalid XQuery like `/*[]`
         if not keywords:
             return ""
 
@@ -236,23 +272,33 @@ class ExistDB:
         else:
             target_path = "/*"
 
-        # Build the XQuery condition dynamically for every keyword
-        conditions = []
-        for kw in keywords:
-            cleaned = kw.strip().replace("&", "&amp;").replace('"', '&quot;').replace("'", "&apos;")
-            conditions.append(f'contains(., "{cleaned}", "?lang=el;strength=primary")')
-        
-        # Toggle between AND or OR logic
-        if partial_match:
-            xquery_filter = " or ".join(conditions)
-        else:
-            xquery_filter = " and ".join(conditions)
+        lucene_special = re.compile(r'([+\-!(){}\[\]^"~*?:\\/&|])')
 
+        phrases = []
+        for kw in keywords:
+            cleaned = kw.strip()
+            if not cleaned:
+                continue
+            escaped = lucene_special.sub(r'\\\1', cleaned)
+            phrases.append(f'"{escaped}"')  # quoted so multi-word keywords match as a phrase
+
+        if not phrases:
+            return ""
+
+        joiner = " OR " if partial_match else " AND "
+        lucene_query = joiner.join(phrases)
+
+        # XQuery string-literal-safe escaping of the composed Lucene query
+        lucene_query = (lucene_query
+                        .replace("&", "&amp;")
+                        .replace('"', "&quot;")
+                        .replace("'", "&apos;"))
         xquery = f"""
-        for $hit in collection('{collection}'){target_path}[{xquery_filter}]
+        xquery version "3.1";
+        declare namespace ft="http://exist-db.org/xquery/lucene";
+        for $hit in collection('{collection}'){target_path}[ft:query(., "{lucene_query}")]
         return $hit
         """
-        
         return self.execute_xquery(xquery)
 
 

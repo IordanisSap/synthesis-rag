@@ -86,3 +86,73 @@ def extract_class_names(raw_xml_string: str) -> list[str]:
         print(f"XML Parsing Error: {e}")
         
     return class_names
+
+
+
+def remove_greek_tones(text: str) -> str:
+    """Helper function to replicate eXist-db's tone and case insensitivity in Python."""
+    text = text.lower()
+    tones = 'άέήίόύώϊϋΐΰ'
+    no_tones = 'αεηιουωιυιυ'
+    return text.translate(str.maketrans(tones, no_tones))
+
+import xml.etree.ElementTree as ET
+
+def remove_greek_tones(text: str) -> str:
+    """Helper function to replicate eXist-db's tone and case insensitivity."""
+    text = text.lower()
+    tones = 'άέήίόύώϊϋΐΰ'
+    no_tones = 'αεηιουωιυιυ'
+    return text.translate(str.maketrans(tones, no_tones))
+
+def extract_matching_fields(raw_xml_string: str, keywords: list[str]) -> list[dict]:
+    """
+    Parses the raw XML and extracts the fields containing the keywords.
+    Returns a list of dicts with the FULL XML PATH to the field.
+    """
+    if not raw_xml_string or not raw_xml_string.strip():
+        return []
+        
+    normalized_kws = [remove_greek_tones(kw.strip()) for kw in keywords if kw.strip()]
+    safe_xml = f"<results>{raw_xml_string}</results>"
+    extracted_data = []
+    
+    try:
+        root = ET.fromstring(safe_xml)
+        
+        def walk_tree(element, current_path, class_name):
+            # 1. Check the text of the current element
+            if element.text and element.text.strip():
+                original_text = element.text.strip()
+                norm_text = remove_greek_tones(original_text)
+                
+                if any(kw in norm_text for kw in normalized_kws):
+                    extracted_data.append({
+                        "class": class_name,
+                        "field_path": current_path,
+                        "value": original_text
+                    })
+            
+            for child in element:
+                child_name = child.tag.split('}')[-1]
+                new_path = f"{current_path}/{child_name}" if current_path else child_name
+                walk_tree(child, new_path, class_name)
+
+        def process_document(doc_root):
+            class_name = doc_root.tag.split('}')[-1]
+            
+            for child in doc_root:
+                child_name = child.tag.split('}')[-1]
+                walk_tree(child, child_name, class_name)
+                        
+        for element in root:
+            if "result" in element.tag: 
+                for hit in element:
+                    process_document(hit)
+            else:
+                process_document(element)
+                
+    except ET.ParseError as e:
+        print(f"XML Parsing Error: {e}")
+        
+    return extracted_data
