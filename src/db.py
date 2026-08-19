@@ -45,23 +45,31 @@ class ExistDB:
             return response.content
         raise RuntimeError(f"Failed to read {filename}: {response.status_code} - {response.text}")
 
+    def execute_xquery(self, xquery: str, start: int = 1, limit: int = 500) -> str:
+        """
+        Executes an XQuery against the eXist-db instance using form data.
+        """
 
-    def execute_xquery(self, xquery: str) -> str:
-            """
-            Executes an XQuery against the eXist-db instance using form data.
-            """
-            response = requests.post(
-                f"{self.url}/rest", 
-                auth=self.auth, 
-                data={"_query": xquery} 
-            )
-            
-            if response.status_code == 200:
-                logger.info("--- XQuery executed successfully ---")
-                return response.text
-            else:
-                logger.error(f"Failed to execute XQuery: {response.status_code} - {response.text}")
-                raise ExistDBError(f"Failed to execute XQuery: {response.status_code} - {response.text}")
+        payload = {
+            "_query": xquery,
+            "_start": start,
+            "_howmany": limit
+        }
+
+        response = requests.post(
+            f"{self.url}/rest",
+            auth=self.auth,
+            data=payload
+        )
+
+        if response.status_code == 200:
+            logger.info("--- XQuery executed successfully ---")
+            return response.text
+        else:
+            logger.error(
+                f"Failed to execute XQuery: {response.status_code} - {response.text}")
+            raise ExistDBError(
+                f"Failed to execute XQuery: {response.status_code} - {response.text}")
 
     def list_contents(self, path: str = "") -> CollectionContents:
         """
@@ -188,7 +196,7 @@ class ExistDB:
                 # First iteration (usually just 'db')
                 current_path = part
 
-    def ensure_substring_index(self, collection: str) -> bool:
+    def ensure_fulltext_index(self, collection: str) -> bool:
         """
         Creates a Lucene full-text index to support keyword/phrase search via
         ft:query(), using a Greek-aware analyzer (case + diacritic folding,
@@ -211,14 +219,13 @@ class ExistDB:
 
         xconf = """<collection xmlns="http://exist-db.org/collection-config/1.0">
             <index>
-                <!-- avoid double-indexing everything via the legacy full-text index -->
-                <fulltext default="none" attributes="false"/>
                 <lucene>
                     <analyzer class="org.apache.lucene.analysis.el.GreekAnalyzer"/>
                     <text match="//*"/>
                 </lucene>
             </index>
-        </collection>"""
+        </collection>
+        """
 
         # 2. PROPERLY STRIP /db TO AVOID DOUBLE DIRECTORY MAPPING
         endpoint = f"{self.url}/{config_file.removeprefix('/db').lstrip('/')}"
@@ -232,27 +239,7 @@ class ExistDB:
             logger.error(f"Failed to push xconf: {resp.status_code} - {resp.text}")
             return False
 
-        print(self.execute_xquery(f'xmldb:reindex("{collection}")'))
         return True
-
-    def substring_search(self, query: str, collection: str, field: str | None = None) -> str:
-        # Preprocessing: Just strip accidental leading/trailing spaces. 
-        cleaned_query = query.strip()
-        
-        safe_query = cleaned_query.replace("&", "&amp;").replace('"', '&quot;').replace("'", "&apos;")
-        
-        if field:
-            target_path = f"//*[local-name()='{field}']"
-        else:
-            target_path = "/*"
-
-        # The third argument tells the database to evaluate the text dynamically ignoring tones and case
-        xquery = f"""
-        for $hit in collection('{collection}'){target_path}[contains(., "{safe_query}", "?lang=el;strength=primary")]
-        return $hit
-        """
-        
-        return self.execute_xquery(xquery)
 
     def multiple_string_search(self, keywords: list[str], collection: str, field: str | None = None, partial_match: bool = False) -> str:
         """
@@ -297,8 +284,69 @@ class ExistDB:
         xquery version "3.1";
         declare namespace ft="http://exist-db.org/xquery/lucene";
         for $hit in collection('{collection}'){target_path}[ft:query(., "{lucene_query}")]
-        return $hit
+        return root($hit)
         """
+
+        print(xquery)
+        return self.execute_xquery(xquery)
+
+
+    def multiple_string_search_file(self, keywords: list[str], collection: str, field: str | None = None, partial_match: bool = False) -> str:
+        """
+        Searches for documents based on a list of keywords, via eXist's Lucene
+        full-text index (ft:query) instead of contains().
+        If partial_match is False (default), returns documents containing ALL keywords.
+        If partial_match is True, returns documents containing AT LEAST ONE keyword.
+
+        Note: matching is token/phrase-based (case + diacritic folding, Greek
+        stemming), not raw substring matching.
+        """
+        if not keywords:
+            return ""
+
+        if field:
+            target_path = f"//*[local-name()='{field}']"
+        else:
+            target_path = "/*"
+
+        lucene_special = re.compile(r'([+\-!(){}\[\]^"~*?:\\/&|])')
+
+        phrases = []
+        for kw in keywords:
+            cleaned = kw.strip()
+            if not cleaned:
+                continue
+            escaped = lucene_special.sub(r'\\\1', cleaned)
+            phrases.append(f'"{escaped}"')  # quoted so multi-word keywords match as a phrase
+
+        if not phrases:
+            return ""
+
+        joiner = " OR " if partial_match else " AND "
+        lucene_query = joiner.join(phrases)
+
+        # XQuery string-literal-safe escaping of the composed Lucene query
+        lucene_query = (lucene_query
+                        .replace("&", "&amp;")
+                        .replace('"', "&quot;")
+                        .replace("'", "&apos;"))
+        xquery = f"""
+        xquery version "3.1";
+        declare namespace ft="http://exist-db.org/xquery/lucene";
+        for $hit in collection('{collection}'){target_path}[ft:query(., "{lucene_query}")]
+        let $filename := util:document-name($hit)
+        let $score := ft:score($hit)
+        group by $filename
+        order by max($score) descending
+        return
+            <result 
+                file="{{$filename}}" 
+                class="{{local-name($hit[1])}}" 
+                top-score="{{max($score)}}" 
+                total-hits="{{count($hit)}}"/>
+        """
+
+        print(xquery)
         return self.execute_xquery(xquery)
 
 

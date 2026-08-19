@@ -132,17 +132,22 @@ def run_rag_pipeline2(
     try:
 
         yield PipelineEvent("status", "Ensuring index presence...")
-        db.ensure_substring_index(workdir)
+        db.ensure_fulltext_index(workdir)
 
         yield PipelineEvent("status", "Extracting keywords...")
         # keywords = extract_keywords(question, config["generation"])
 
-        keywords = ['Ο Δίσκος της Φαιστού']
+        keywords = ['Δίσκος της Φαιστού']
         yield PipelineEvent("result", "Extracted keywords", data=keywords)
 
         yield PipelineEvent("status", "Searching the database...")
         res = db.multiple_string_search(keywords, workdir, partial_match=True)
 
+        res = db.multiple_string_search_file(keywords, workdir, partial_match=True)
+
+        print(res)
+        exit()
+        
         matching_fields = extract_matching_fields(res, keywords)
         print(matching_fields)
         yield PipelineEvent("result", "Extracted matching fields", data=matching_fields)
