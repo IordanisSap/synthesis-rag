@@ -8,4 +8,4 @@ model="Qwen/Qwen3.5-9B"
 provider="vllm"
 temperature=0.10
 num_ctx=32768
-num_predict=200
+num_predict=1024

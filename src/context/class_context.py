@@ -1,6 +1,6 @@
 from src.db import ExistDB
 from src.context.field_catalog.process import postprocess_xml_fields
-from src.services.ai.token_estimator import estimate_tokens
+from src.services.ai.token_estimator import count_tokens
 from src.schema import get_template_filepath, NoInstanceError, get_instances_filepaths
 import logging
 from collections.abc import Sequence
@@ -125,7 +125,7 @@ def trim_contexts(contexts: list[ClassContext], max_tokens: int) -> list[str]:
     for context in contexts:
         processed_context = trim_context(context)
         context_str = contextToString(processed_context)
-        context_tokens = estimate_tokens(context_str)
+        context_tokens = count_tokens(context_str)
 
         if total_tokens + context_tokens <= max_tokens and len(trimmed_contexts) < MAX_CLASS_NUM:
             trimmed_contexts.append(context_str)

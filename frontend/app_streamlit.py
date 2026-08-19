@@ -20,7 +20,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 
-from src.workflows.workflows import run_rag_pipeline2
+from src.workflows.workflows import answer_with_search_results
 
 
 
@@ -102,21 +102,26 @@ if question:
         status_box = st.status("Working on it...", expanded=True)
         final_answer = None
 
-        for event in run_rag_pipeline2(question, db, workdir, config, index_folder):
+        for event in answer_with_search_results(question, db, workdir, config, index_folder):
             if event.type == "status":
                 status_box.write(event.message)
 
             elif event.type == "result":
                 status_box.write(f"**{event.message}**")
                 if isinstance(event.data, str):
-                    # Plain strings (xquery, the built context, etc.) go through
-                    # st.write() as markdown, which mangles underscores, brackets,
-                    # backticks, and collapses whitespace. st.code() shows them
-                    # verbatim instead.
+                    # Plain strings go through code block to prevent Markdown mangling
                     status_box.code(event.data, language="xquery")
+                    
+                elif isinstance(event.data, (list, tuple)):
+                    # Catch arrays generically. If > 5, collapse it.
+                    if len(event.data) > 5:
+                        with status_box.expander(f"View {len(event.data)} items", expanded=False):
+                            st.write(event.data)
+                    else:
+                        status_box.write(event.data)
+                        
                 else:
-                    # lists/dicts (e.g. relevant_classes, class_descriptions) are
-                    # fine going through st.write() as-is
+                    # Fallback for dicts, ints, or anything else
                     status_box.write(event.data)
 
 

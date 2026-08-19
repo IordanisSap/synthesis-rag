@@ -12,9 +12,10 @@ from src.context.filtering import (
     is_noise_attribute,
     local_name,
     DEFAULT_XML_FIELDS_TO_TRIM,
-    MAX_STRING_LENGTH,
 )
 
+DEFAULT_KEEP_STRING_LENGTH = 50
+MAX_STRING_LENGTH = 2000
 logger = logging.getLogger(__name__)
 
 
@@ -117,7 +118,7 @@ def prune_empty_containers(root) -> None:
 def postprocess_xml_fields(
     xml_str: str,
     paths_to_remove: set[str] = set(DEFAULT_XML_FIELDS_TO_TRIM),
-    max_length: int = MAX_STRING_LENGTH,
+    max_length: int = DEFAULT_KEEP_STRING_LENGTH,
 ) -> str:
     """
     Filters out unwanted XML fields and crops long text values.
@@ -163,11 +164,48 @@ def postprocess_xml_fields(
     ET.indent(root, space="  ")
     return ET.tostring(root, encoding="unicode")
 
+def remove_empty_xml_fields(xml_str: str) -> str:
+    root = ET.fromstring(xml_str)
+
+    def is_empty(elem) -> bool:
+        # True if no text, or text is just whitespace
+        text_empty = not (elem.text or "").strip()
+        # True if no child elements
+        no_children = len(elem) == 0
+        # True if no attributes exist (other than noise attributes like xmlns)
+        no_real_attrs = not any(not is_noise_attribute(name) for name in elem.attrib)
+        
+        return text_empty and no_children and no_real_attrs
+
+    def recurse(elem):
+        # 1. Process all children bottom-up first
+        for child in list(elem):
+            recurse(child)
+            
+        # 2. Delete any attributes on this element that have an empty value ("")
+        empty_attrs = [k for k, v in elem.attrib.items() if not (v or "").strip()]
+        for k in empty_attrs:
+            del elem.attrib[k]
+            
+        # 3. Now that children and attributes are cleaned up, check if children are empty
+        to_remove = []
+        for child in list(elem):
+            if is_empty(child):
+                to_remove.append(child)
+                
+        # 4. Remove the empty children
+        for child in to_remove:
+            elem.remove(child)
+
+    recurse(root)
+    
+    ET.indent(root, space="  ")
+    return ET.tostring(root, encoding="unicode")
 
 def postprocess_catalog_fields(
     fields: list,
     paths_to_remove: set[str] = set(DEFAULT_XML_FIELDS_TO_TRIM),
-    max_length: int = MAX_STRING_LENGTH,
+    max_length: int = DEFAULT_KEEP_STRING_LENGTH,
 ) -> list:
     """
     Filters out unwanted catalog fields and crops long sample values.

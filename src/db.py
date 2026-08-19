@@ -45,7 +45,7 @@ class ExistDB:
             return response.content
         raise RuntimeError(f"Failed to read {filename}: {response.status_code} - {response.text}")
 
-    def execute_xquery(self, xquery: str, start: int = 1, limit: int = 500) -> str:
+    def execute_xquery(self, xquery: str, start: int = 1, limit: int = 50) -> str:
         """
         Executes an XQuery against the eXist-db instance using form data.
         """
@@ -185,7 +185,6 @@ class ExistDB:
                 parent = f"/{current_path}"
                 current_path = f"{current_path}/{part}"
                 
-                # XQuery to check if collection exists, and create it if it doesn't
                 query = f"""
                 xquery version "3.1";
                 if (xmldb:collection-available("{current_path}")) then ()
@@ -193,7 +192,6 @@ class ExistDB:
                 """
                 self.execute_xquery(query)
             else:
-                # First iteration (usually just 'db')
                 current_path = part
 
     def ensure_fulltext_index(self, collection: str) -> bool:
@@ -202,10 +200,10 @@ class ExistDB:
         ft:query(), using a Greek-aware analyzer (case + diacritic folding,
         stemming, stopwords).
         """
+
         config_collection = f"/db/system/config/db/{collection.removeprefix('/db').lstrip('/')}"
         config_file = f"{config_collection}/collection.xconf"
 
-        print(f"Ensuring index presence for collection: {config_file}")
 
         try:
             contents = self.list_contents(config_collection)
@@ -214,7 +212,6 @@ class ExistDB:
         except Exception:
             pass
 
-        # 1. FORCE THE CREATION OF THE DIRECTORIES
         self.ensure_collection_exists(config_collection)
 
         xconf = """<collection xmlns="http://exist-db.org/collection-config/1.0">
@@ -241,16 +238,15 @@ class ExistDB:
 
         return True
 
+
     def multiple_string_search(self, keywords: list[str], collection: str, field: str | None = None, partial_match: bool = False) -> str:
         """
         Searches for documents based on a list of keywords, via eXist's Lucene
         full-text index (ft:query) instead of contains().
         If partial_match is False (default), returns documents containing ALL keywords.
         If partial_match is True, returns documents containing AT LEAST ONE keyword.
-
-        Note: matching is token/phrase-based (case + diacritic folding, Greek
-        stemming), not raw substring matching.
         """
+
         if not keywords:
             return ""
 
@@ -267,7 +263,7 @@ class ExistDB:
             if not cleaned:
                 continue
             escaped = lucene_special.sub(r'\\\1', cleaned)
-            phrases.append(f'"{escaped}"')  # quoted so multi-word keywords match as a phrase
+            phrases.append(f'"{escaped}"')
 
         if not phrases:
             return ""
@@ -275,61 +271,12 @@ class ExistDB:
         joiner = " OR " if partial_match else " AND "
         lucene_query = joiner.join(phrases)
 
-        # XQuery string-literal-safe escaping of the composed Lucene query
         lucene_query = (lucene_query
                         .replace("&", "&amp;")
                         .replace('"', "&quot;")
                         .replace("'", "&apos;"))
-        xquery = f"""
-        xquery version "3.1";
-        declare namespace ft="http://exist-db.org/xquery/lucene";
-        for $hit in collection('{collection}'){target_path}[ft:query(., "{lucene_query}")]
-        return root($hit)
-        """
+        
 
-        print(xquery)
-        return self.execute_xquery(xquery)
-
-
-    def multiple_string_search_file(self, keywords: list[str], collection: str, field: str | None = None, partial_match: bool = False) -> str:
-        """
-        Searches for documents based on a list of keywords, via eXist's Lucene
-        full-text index (ft:query) instead of contains().
-        If partial_match is False (default), returns documents containing ALL keywords.
-        If partial_match is True, returns documents containing AT LEAST ONE keyword.
-
-        Note: matching is token/phrase-based (case + diacritic folding, Greek
-        stemming), not raw substring matching.
-        """
-        if not keywords:
-            return ""
-
-        if field:
-            target_path = f"//*[local-name()='{field}']"
-        else:
-            target_path = "/*"
-
-        lucene_special = re.compile(r'([+\-!(){}\[\]^"~*?:\\/&|])')
-
-        phrases = []
-        for kw in keywords:
-            cleaned = kw.strip()
-            if not cleaned:
-                continue
-            escaped = lucene_special.sub(r'\\\1', cleaned)
-            phrases.append(f'"{escaped}"')  # quoted so multi-word keywords match as a phrase
-
-        if not phrases:
-            return ""
-
-        joiner = " OR " if partial_match else " AND "
-        lucene_query = joiner.join(phrases)
-
-        # XQuery string-literal-safe escaping of the composed Lucene query
-        lucene_query = (lucene_query
-                        .replace("&", "&amp;")
-                        .replace('"', "&quot;")
-                        .replace("'", "&apos;"))
         xquery = f"""
         xquery version "3.1";
         declare namespace ft="http://exist-db.org/xquery/lucene";
@@ -343,7 +290,9 @@ class ExistDB:
                 file="{{$filename}}" 
                 class="{{local-name($hit[1])}}" 
                 top-score="{{max($score)}}" 
-                total-hits="{{count($hit)}}"/>
+                total-hits="{{count($hit)}}">
+                {{root($hit[1])}}
+            </result>
         """
 
         print(xquery)

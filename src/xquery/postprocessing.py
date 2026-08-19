@@ -17,7 +17,6 @@ def postprocess_xquery(xquery_string: str, database_config: dict) -> str:
     
     return final_xquery
 
-import re
 
 _VAR = r"\$[A-Za-z_][\w\-]*"
 _STEP = r"@?[A-Za-z_][\w\-]*(?::[A-Za-z_][\w\-]*)?"

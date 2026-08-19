@@ -17,6 +17,6 @@ def answer_question(context: str, question: str, llm_config: dict) -> str:
         PromptTemplate.RESPOND_TO_QUESTION,
         {"context": context, "question": question}
     )
-    
+
     response = call_LLM(system_prompt, user_prompt, llm_config)
     return response

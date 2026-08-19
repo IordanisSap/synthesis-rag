@@ -3,7 +3,7 @@ from xml.etree import ElementTree as ET
 XSI_NS = "http://www.w3.org/2001/XMLSchema-instance"
 EXIST_NS = "http://exist.sourceforge.net/NS/exist"
 DEFAULT_XML_FIELDS_TO_TRIM = ["admin"]
-MAX_STRING_LENGTH = 50                 # Used to crop very long strings
+
 
 def local_name(tag: str) -> str:
     return tag.split("}", 1)[1] if tag.startswith("{") else tag
@@ -87,16 +87,6 @@ def extract_class_names(raw_xml_string: str) -> list[str]:
         
     return class_names
 
-
-
-def remove_greek_tones(text: str) -> str:
-    """Helper function to replicate eXist-db's tone and case insensitivity in Python."""
-    text = text.lower()
-    tones = 'άέήίόύώϊϋΐΰ'
-    no_tones = 'αεηιουωιυιυ'
-    return text.translate(str.maketrans(tones, no_tones))
-
-import xml.etree.ElementTree as ET
 
 def remove_greek_tones(text: str) -> str:
     """Helper function to replicate eXist-db's tone and case insensitivity."""

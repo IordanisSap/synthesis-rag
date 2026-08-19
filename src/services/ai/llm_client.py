@@ -26,7 +26,7 @@ def call_ollama(system_prompt, user_prompt, model_config) -> str | None:
 
     response: ChatResponse = ollama_chat(
         model=model,
-        options={'temperature': model_config.get('temperature', 0.1), 'num_ctx': model_config.get('num_ctx', 2048)},
+        options={'temperature': model_config.get('temperature', 0.1), 'num_ctx': model_config.get('num_ctx', 4096)},
         think=False,
         messages=[
             {"role": "system", "content": system_prompt},
@@ -49,7 +49,7 @@ def call_vllm(system_prompt, user_prompt, model_config) -> str | None:
     response = client.chat.completions.create(
         model=model,
         temperature=model_config.get("temperature", 0.1),
-        max_tokens=model_config.get("max_tokens", 2048),
+        max_tokens=model_config.get("num_predict", 2048),
         extra_body={"chat_template_kwargs": {"enable_thinking": False}},
         messages=[
             {"role": "system", "content": system_prompt},
