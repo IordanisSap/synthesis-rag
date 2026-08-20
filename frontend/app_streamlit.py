@@ -48,11 +48,10 @@ class ExistDBSettings(BaseSettings):
     )
 
 exist_db_settings = ExistDBSettings() # type: ignore
-
-index_folder = ".index"
-
 CONFIG_PATH = Path("config/dev.toml")
 config = parse(CONFIG_PATH)
+
+index_folder = config["search"]["index_path"]
 workdir = config["database"]["workdir"]
 
 def setup_logging():
@@ -71,20 +70,12 @@ logger = logging.getLogger(__name__)
 
 db = ExistDB(exist_db_settings.url, exist_db_settings.user, exist_db_settings.password)
 
-QUESTION = "Are there findings made from silver?"
-
-
-
-
-
-# TODO: wire these up to your real objects however you currently build them
-# from your_project import db, workdir, config, index_folder
-
 st.set_page_config(page_title="Synthesis RAG Chatbot - MESSARA", page_icon="🤖")
 st.title("Synthesis RAG Chatbot - MESSARA")
 
 if "history" not in st.session_state:
-    st.session_state.history = []  # list of {"role": ..., "content": ...}
+    st.session_state.history = []
+
 
 # replay previous turns on rerun
 for turn in st.session_state.history:

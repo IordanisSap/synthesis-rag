@@ -45,7 +45,7 @@ def search_to_string_hits(xml_string, available_classes):
     return hits
 
 
-def search_to_string(xml_string, available_classes, max_tokens=None, max_num=TOPK):
+def search_to_string(xml_string, available_classes, fields_to_ignore, max_tokens=None, max_num=TOPK):
     root = ET.fromstring(xml_string)
     used_tokens = 0
     keep_xmls = []
@@ -59,7 +59,7 @@ def search_to_string(xml_string, available_classes, max_tokens=None, max_num=TOP
             inner_xml_string += ET.tostring(child, encoding='unicode')
         final_content = inner_xml_string.strip()
 
-        removed_irrelevant_fields = postprocess_xml_fields(final_content, max_length=1000)
+        removed_irrelevant_fields = postprocess_xml_fields(final_content, max_length=1000, fields_to_ignore=fields_to_ignore)
         final = remove_empty_xml_fields(removed_irrelevant_fields)
         estimated_tokens = count_tokens(final)
         if max_tokens is not None and (used_tokens + estimated_tokens) > max_tokens:

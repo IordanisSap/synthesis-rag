@@ -21,11 +21,10 @@ class ExistDBSettings(BaseSettings):
     )
 
 exist_db_settings = ExistDBSettings() # type: ignore
-
-INDEX_FOLDER = ".index"
-
 CONFIG_PATH = Path("config/dev.toml")
 config = parse(CONFIG_PATH)
+
+INDEX_FOLDER = config["search"]["index_path"]
 workdir = config["database"]["workdir"]
 
 def setup_logging():

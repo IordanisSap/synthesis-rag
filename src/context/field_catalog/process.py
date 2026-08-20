@@ -117,14 +117,14 @@ def prune_empty_containers(root) -> None:
 
 def postprocess_xml_fields(
     xml_str: str,
-    paths_to_remove: set[str] = set(DEFAULT_XML_FIELDS_TO_TRIM),
+    fields_to_ignore: set[str] = set(DEFAULT_XML_FIELDS_TO_TRIM),
     max_length: int = DEFAULT_KEEP_STRING_LENGTH,
 ) -> str:
     """
     Filters out unwanted XML fields and crops long text values.
     """
     root = ET.fromstring(xml_str)
-    paths_to_remove = paths_to_remove | set(DEFAULT_XML_FIELDS_TO_TRIM)
+    paths_to_remove = fields_to_ignore | set(DEFAULT_XML_FIELDS_TO_TRIM)
 
     def crop_text(text: str):
         if text is None:
@@ -204,7 +204,7 @@ def remove_empty_xml_fields(xml_str: str) -> str:
 
 def postprocess_catalog_fields(
     fields: list,
-    paths_to_remove: set[str] = set(DEFAULT_XML_FIELDS_TO_TRIM),
+    fields_to_ignore: set[str] = set(DEFAULT_XML_FIELDS_TO_TRIM),
     max_length: int = DEFAULT_KEEP_STRING_LENGTH,
 ) -> list:
     """
@@ -216,7 +216,7 @@ def postprocess_catalog_fields(
     filtered_fields = [
         field_info 
         for field_info in fields 
-        if field_info.get("category") != "always-empty" and field_info.get("path").split("/")[0] not in paths_to_remove
+        if field_info.get("category") != "always-empty" and field_info.get("path").split("/")[0] not in fields_to_ignore
     ]
 
     for field_info in filtered_fields:

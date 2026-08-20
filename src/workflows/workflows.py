@@ -74,7 +74,8 @@ def answer_with_search_results(
 
         yield PipelineEvent("status", "Searching the database...")
         res = db.multiple_string_search(keywords, workdir, partial_match=True)
-        search_xml_contexts = search_to_string(res, available_classes, max_tokens=config["generation"]["num_ctx"] - config["generation"]["num_predict"] - RESERVED_TOKEN_NUM)
+        fields_to_ignore = set(config["search"]["ignore_tags"])
+        search_xml_contexts = search_to_string(res, available_classes, fields_to_ignore, max_tokens=config["generation"]["num_ctx"] - config["generation"]["num_predict"] - RESERVED_TOKEN_NUM)
         final_search_context = "\n".join(search_xml_contexts)
 
         hits_to_display = search_to_string_hits(res, available_classes)
@@ -163,7 +164,8 @@ def answer_with_xquery(
             yield PipelineEvent("status", "No hits found in the database for the generated XQuery.")
             yield PipelineEvent("status", "Trying to answer with search context...")
             # --- Build alternative context from XML file contents -------------------------------------------
-            search_xml_contexts = search_to_string(res, available_classes, max_tokens=config["generation"]["num_ctx"] - config["generation"]["num_predict"] - RESERVED_TOKEN_NUM)
+            fields_to_ignore = set(config["search"]["ignore_tags"])
+            search_xml_contexts = search_to_string(res, available_classes, fields_to_ignore, max_tokens=config["generation"]["num_ctx"] - config["generation"]["num_predict"] - RESERVED_TOKEN_NUM)
             final_search_context = "\n".join(search_xml_contexts)
             print(count_tokens(final_search_context))
         

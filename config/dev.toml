@@ -2,8 +2,11 @@
 base_path = "/db"
 workdir = "DMSCOLLECTION/MESSARA"
 
+[search]
+index_path = ".index"
+ignore_tags = ["admin"]
+
 [generation]
-# model="Qwen/Qwen3-14B-FP8"
 model="Qwen/Qwen3.5-9B"
 provider="vllm"
 temperature=0.10
