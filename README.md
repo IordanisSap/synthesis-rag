@@ -2,6 +2,13 @@
 SynthesisRAG is a Retrieval-Augmented Generation (RAG) system that offers Question Answering (QA) capabilities for any information system relying on Synthesis
 
 ## How to run
+
+First, there should be a model running locally using either ollama or vllm. For example using the model `Qwen3.5-9B`
+```
+vllm serve Qwen/Qwen3.5-9B --quantization fp8 --max-model-len 32768 --gpu-memory-utilization 0.9 --enforce-eager
+```
+
+You can then run the pipeline using the following 2 methods:
 ### Run with frontend
 ```
 streamlit run frontend/app_streamlit.py \
